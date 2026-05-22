@@ -1,0 +1,68 @@
+name: Backend Issue
+description: MoneySheet Backend 작업 이슈 템플릿
+title: "[feat] "
+labels:
+  - needs-triage
+body:
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Prefix
+      description: 작업 유형을 선택하세요.
+      options:
+        - feat
+        - fix
+        - refactor
+        - chore
+        - docs
+        - test
+        - style
+        - del
+    validations:
+      required: true
+
+  - type: input
+    id: domain
+    attributes:
+      label: Domain
+      description: 예) auth, ledger, budget, report
+      placeholder: ledger
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: 작업 목적을 간단히 작성하세요.
+      placeholder: 무엇을 왜 작업하는지 작성
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks
+      description: 해야 할 일을 체크리스트로 작성하세요.
+      placeholder: |
+        - [ ] API 설계
+        - [ ] 서비스 로직 구현
+        - [ ] 테스트 작성
+    validations:
+      required: true
+
+  - type: textarea
+    id: done_definition
+    attributes:
+      label: Definition of Done
+      description: 완료 조건을 작성하세요.
+      placeholder: 빌드/테스트 통과, API 응답 확인
+    validations:
+      required: true
+
+  - type: textarea
+    id: refs
+    attributes:
+      label: References
+      description: 관련 문서, PR, 화면, API 링크가 있으면 적어주세요.
+      placeholder: docs/... , PR 링크 등
