@@ -28,7 +28,7 @@ body:
       description: 예) auth, ledger, budget, report
       placeholder: ledger
     validations:
-      required: true
+      required: true까지 요구하면 이렇게요.
 
   - type: textarea
     id: summary
