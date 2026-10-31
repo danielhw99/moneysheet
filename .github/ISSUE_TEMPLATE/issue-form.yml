@@ -1,68 +1,98 @@
-name: Backend Issue
-description: MoneySheet Backend 작업 이슈 템플릿
-title: "[feat] "
-labels:
-  - needs-triage
+name: "🚀 이슈 생성"
+description: "새로운 기능, 버그 수정, 리팩토링 등을 위한 이슈를 생성합니다."
+title: "[Label] 이슈 제목을 입력해주세요"
+labels: []
 body:
   - type: dropdown
-    id: issue_type
+    id: label
     attributes:
-      label: Prefix
-      description: 작업 유형을 선택하세요.
+      label: "🏷️ 이슈 종류 (Label)"
+      description: "이슈에 가장 적합한 라벨을 하나 선택해주세요."
       options:
-        - feat
-        - fix
-        - refactor
-        - chore
-        - docs
-        - test
-        - style
-        - del
+        - "feat: 새로운 기능 추가"
+        - "fix: 버그 수정"
+        - "refactor: 코드 리팩토링"
+        - "docs: 문서 작업"
+        - "chore: 빌드, 설정 등 기타 작업"
     validations:
       required: true
 
-  - type: input
-    id: domain
+  - type: textarea
+    id: description
     attributes:
-      label: Domain
-      description: 예) auth, ledger, budget, report
-      placeholder: ledger
+      label: "📝 상세 내용 (Description)"
+      description: "이슈에 대한 구체적인 설명을 작성해주세요. (배경, 목적, 문제 상황)"
+      placeholder: "예: 현재 OO 기능은 사용자가 XX할 때 불편함이 있어, 이를 개선하고자 합니다."
     validations:
-      required: true까지 요구하면 이렇게요.
+      required: true
 
   - type: textarea
-    id: summary
+    id: tdd_plan
     attributes:
-      label: Summary
-      description: 작업 목적을 간단히 작성하세요.
-      placeholder: 무엇을 왜 작업하는지 작성
+      label: "🧪 TDD 계획 (Test Plan)"
+      description: |
+        TDD로 진행할 테스트 계획을 작성해주세요.
+        - 어떤 테스트를 먼저 실패(Red)로 만들 것인지
+        - 어떤 단위/통합 테스트 범위인지
+        - 경계/예외 케이스는 무엇인지
+      value: |
+        ### 1) 테스트 범위
+        - [ ] Unit (Service/Domain)
+        - [ ] Integration (Repository/API)
+        - [ ] E2E (선택)
+
+        ### 2) 핵심 시나리오 (Given-When-Then)
+        - Given:
+          When:
+          Then:
+
+        ### 3) 경계/예외 케이스
+        - [ ] 권한/인증 실패
+        - [ ] 유효성 검증 실패
+        - [ ] 중복/동시성 이슈
+        - [ ] 외부 연동 실패(있다면)
+
+        ### 4) Mock/Stub 필요 여부
+        - [ ] 외부 API / 메시지 큐 / 이메일·SMS / 파일스토리지 등 Mock 처리
     validations:
       required: true
 
   - type: textarea
     id: tasks
     attributes:
-      label: Tasks
-      description: 해야 할 일을 체크리스트로 작성하세요.
+      label: "✅ 체크리스트 (Tasks)"
+      description: "이 이슈를 완료하기 위해 필요한 작업 목록을 구체적으로 작성해주세요."
+      value: |
+        - [ ] 요구사항/정책 정리
+        - [ ] 테스트 케이스 작성(RED)
+        - [ ] 최소 구현(GREEN)
+        - [ ] 리팩토링(REFACTOR)
+        - [ ] 예외/경계 케이스 추가
+        - [ ] 문서 업데이트(선택)
+    validations:
+      required: true
+
+  - type: textarea
+    id: dod
+    attributes:
+      label: "🎯 완료 조건 (Definition of Done)"
+      description: "이 이슈가 '완료'로 인정되는 기준을 작성해주세요."
+      value: |
+        - [ ] 핵심 시나리오 테스트가 모두 통과한다
+        - [ ] 예외/경계 케이스가 포함되어 있다
+        - [ ] 리팩토링 후 중복/매직넘버/하드코딩이 정리되어 있다
+        - [ ] 기능/정책 변경점이 문서에 반영되어 있다(해당 시)
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "📎 참고 자료 (References)"
+      description: "관련 이슈, 외부 링크, 스크린샷 등을 첨부해주세요."
       placeholder: |
-        - [ ] API 설계
-        - [ ] 서비스 로직 구현
-        - [ ] 테스트 작성
+        - 관련된 이슈: #123
+        - 참고 링크: https://...
+        - 스크린샷:
     validations:
-      required: true
-
-  - type: textarea
-    id: done_definition
-    attributes:
-      label: Definition of Done
-      description: 완료 조건을 작성하세요.
-      placeholder: 빌드/테스트 통과, API 응답 확인
-    validations:
-      required: true
-
-  - type: textarea
-    id: refs
-    attributes:
-      label: References
-      description: 관련 문서, PR, 화면, API 링크가 있으면 적어주세요.
-      placeholder: docs/... , PR 링크 등
+      required: false
