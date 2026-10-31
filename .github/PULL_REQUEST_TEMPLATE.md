@@ -1,20 +1,16 @@
-## Summary
+## 🔗 Related Issue
+> 이슈 번호를 작성해주세요. (예: Closes #123)
+- Closes #
 
-- 관련 이슈: `#`
-- 작업 분류: `feat | fix | refactor | chore | docs | test | style | del`
+## 📝 작업 내용
+> 이번 PR에서 작업한 내용을 간략히 설명해주세요.
 
-## Changes
+## ✅ Changes
+> 주요 변경 사항을 bullet point로 정리합니다.
 
-- 무엇을 변경했는지 작성해주세요.
+## 📸 스크린샷 (선택)
+> UI 변경 사항이나 테스트 결과 화면이 있다면 첨부해주세요.
+<img width="500" alt="스크린샷" src="">
 
-## Why
-
-- 왜 이 변경이 필요한지 작성해주세요.
-
-## Checklist
-
-- [ ] 제목이 `[<Prefix>] #<Issue_Number> <Description>` 형식을 따릅니다.
-- [ ] 관련 issue, milestone, label, project를 확인했습니다.
-- [ ] `develop` branch에 직접 작업하지 않았습니다.
-- [ ] 빌드/테스트/실행 오류를 확인했습니다.
-- [ ] self review를 완료했습니다.
+## ⚠️ Notes (Optional)
+> 리뷰 시 유의할 점, 후속 PR 예정 사항, 배포 영향 등을 적습니다.
