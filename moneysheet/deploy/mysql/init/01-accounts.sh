@@ -1,4 +1,6 @@
 #!/bin/bash
+# Isolate shell options when the official entrypoint sources this file.
+(
 set -euo pipefail
 
 # Run only against a new data volume. Generated hex values are safe SQL literals.
@@ -13,7 +15,8 @@ export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"
 mysql --protocol=socket -uroot <<SQL
 CREATE USER 'moneysheet_app'@'%' IDENTIFIED BY '${APP_PASSWORD}';
 CREATE USER 'moneysheet_migration'@'%' IDENTIFIED BY '${MIGRATION_PASSWORD}';
-GRANT SELECT, INSERT, UPDATE, DELETE ON moneysheet_dev.* TO 'moneysheet_app'@'%';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES ON moneysheet_dev.* TO 'moneysheet_migration'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON \`moneysheet\\_dev\`.* TO 'moneysheet_app'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES ON \`moneysheet\\_dev\`.* TO 'moneysheet_migration'@'%';
 SQL
 unset MYSQL_PWD
+)

@@ -4,6 +4,7 @@ services:
   mysql:
     image: mysql:8.4.13
     restart: unless-stopped
+    entrypoint: ["/bin/bash", "/opt/moneysheet/preflight.sh"]
     environment:
       MYSQL_DATABASE: moneysheet_dev
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?required}
@@ -18,8 +19,9 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init:/docker-entrypoint-initdb.d:ro
+      - ./scripts:/opt/moneysheet:ro
     healthcheck:
-      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h127.0.0.1 -uroot -Nse 'SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD", "/bin/bash", "/opt/moneysheet/healthcheck.sh"]
       interval: 10s
       timeout: 5s
       retries: 12
