@@ -1,18 +1,7 @@
 spring:
-  profiles:
-    include: secret
-
   application:
     name: moneysheet
-
-  datasource:
-    driver-class-name: org.mariadb.jdbc.Driver
-
   jpa:
+    open-in-view: false
     hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.MariaDBDialect
+      ddl-auto: none
