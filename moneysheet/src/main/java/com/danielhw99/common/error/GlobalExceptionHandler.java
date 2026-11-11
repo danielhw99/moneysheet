@@ -1,6 +1,8 @@
 package com.danielhw99.common.error;
 
+import java.lang.annotation.Annotation;
 import java.util.List;
+import java.util.stream.Stream;
 
 import com.danielhw99.common.web.TraceIdFilter;
 
@@ -9,6 +11,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.MethodParameter;
+import org.springframework.core.annotation.MergedAnnotations;
+import org.springframework.validation.method.ParameterErrors;
+import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.MatrixVariable;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -92,10 +103,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     .distinct().toList();
         }
         if (exception instanceof HandlerMethodValidationException invalid && !invalid.isForReturnValue()) {
-            return invalid.getParameterValidationResults().stream().map(result -> {
-                String name = result.getMethodParameter().getParameterName();
-                return new ApiFieldError(name == null ? "arg" + result.getMethodParameter().getParameterIndex()
-                        : name, "입력값을 확인해주세요.");
+            return invalid.getParameterValidationResults().stream().flatMap(result -> {
+                if (result instanceof ParameterErrors errors) {
+                    return errors.getFieldErrors().stream()
+                            .map(error -> new ApiFieldError(error.getField(), "입력값을 확인해주세요."));
+                }
+                return Stream.of(new ApiFieldError(requestParameterName(result.getMethodParameter()),
+                        "입력값을 확인해주세요."));
             }).distinct().toList();
         }
         if (exception instanceof MethodArgumentTypeMismatchException mismatch) {
@@ -105,6 +119,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             return List.of(new ApiFieldError(missing.getParameterName(), "필수 입력값입니다."));
         }
         return List.of();
+    }
+
+    private String requestParameterName(MethodParameter parameter) {
+        MergedAnnotations annotations = MergedAnnotations.from(parameter.getParameter());
+        List<Class<? extends Annotation>> namedAnnotations = List.of(RequestParam.class, PathVariable.class,
+                RequestHeader.class, CookieValue.class, MatrixVariable.class, RequestPart.class);
+        for (Class<? extends Annotation> type : namedAnnotations) {
+            var annotation = annotations.get(type);
+            if (annotation.isPresent()) {
+                String name = annotation.getString("name");
+                if (!name.isEmpty()) {
+                    return name;
+                }
+            }
+        }
+        String name = parameter.getParameterName();
+        return name == null ? "arg" + parameter.getParameterIndex() : name;
     }
 
     private void logUnexpected(Exception exception, HttpServletRequest request) {
