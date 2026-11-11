@@ -28,3 +28,28 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+
+// Migration tooling is isolated from the application runtime and bootJar.
+sourceSets {
+    migration {}
+}
+
+dependencies {
+    migrationImplementation 'org.springframework.boot:spring-boot-starter-flyway'
+    migrationRuntimeOnly 'org.flywaydb:flyway-mysql'
+    migrationRuntimeOnly 'com.mysql:mysql-connector-j'
+}
+
+['dbInfo': 'info', 'dbValidate': 'validate', 'dbMigrate': 'migrate'].each { taskName, operation ->
+    tasks.register(taskName, JavaExec) {
+        group = 'database'
+        description = "Run Flyway ${operation} without starting the application"
+        classpath = sourceSets.migration.runtimeClasspath
+        mainClass = 'com.danielhw99.migration.DatabaseMigration'
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+        args operation
+    }
+}

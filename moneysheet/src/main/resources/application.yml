@@ -5,3 +5,11 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: none
+  flyway:
+    enabled: false
+    clean-disabled: true
+    create-schemas: false
+    baseline-on-migrate: false
+  sql:
+    init:
+      mode: never
