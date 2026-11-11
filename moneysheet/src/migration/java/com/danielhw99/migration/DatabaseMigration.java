@@ -1,6 +1,9 @@
 package com.danielhw99.migration;
 
+import java.util.Arrays;
+
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.CoreMigrationType;
 import org.flywaydb.core.api.MigrationInfo;
 
 public final class DatabaseMigration {
@@ -44,7 +47,10 @@ public final class DatabaseMigration {
                 }
                 case "validate" -> flyway.validate();
                 case "migrate" -> {
-                    if (flyway.info().all().length == 0) {
+                    boolean hasLocalSql = Arrays.stream(flyway.info().all())
+                            .anyMatch(migration -> migration.getState().isResolved()
+                                    && migration.getType() == CoreMigrationType.SQL);
+                    if (!hasLocalSql) {
                         throw new IllegalStateException("No migration scripts found; migrate refused.");
                     }
                     flyway.migrate();
