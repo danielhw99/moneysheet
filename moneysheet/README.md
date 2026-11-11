@@ -107,3 +107,24 @@ MySQL DDL 실패는 일부 변경을 남길 수 있으므로 실패 시 재실�
 - Gradle 기본 리소스 경로를 중복 등록한 문제는 제거. 단독 validate의 PENDING 거부는 검증 완화 없이 실행 순서를 바로잡음.
 - JPA 엔티티·업무 API는 아직 미구현. ddl-auto는 none 유지. 적용된 V1 파일을 수정하지 않고 후속 스키마 변경은 V2 이상으로 추가.
 - 자동화 테스트 코드는 추가·실행하지 않음. 위 기록은 실제 수동 DB/명령 검증 결과.
+
+
+## JPA 매핑 — 이슈 #8 / 1차 체크포인트
+
+- user/category/budget/transaction/memo/payment/cashflow 도메인별 entity 패키지에 업무 엔티티 8개 구성.
+- BaseEntity: IDENTITY Long ID, created_at/updated_at DATETIME(6). JPA 생명주기 콜백에서 UTC·마이크로초 정밀도로 시각 관리. 직접 SQL·bulk UPDATE에는 콜백이 적용되지 않음.
+- 금액/식비는 Long, 날짜는 LocalDate, 사용 시각은 LocalTime, UTC 저장용 시각은 LocalDateTime. LocalDateTime 필드명은 합의한 Date 접미사 사용.
+- ENUM은 EnumType.STRING 및 VARCHAR JDBC 타입으로 매핑하여 기존 MySQL VARCHAR 스키마 유지.
+- 부모 관계는 단방향 ManyToOne LAZY. Cascade·orphanRemoval·양방향 컬렉션은 추가하지 않음. 엔티티를 API 응답으로 직접 노출하지 않음.
+- allowance_month_id는 DB 생성 컬럼이므로 매핑하지 않음. 월 관계는 monthlyBudget으로 확인.
+- Repository·업무 Service·API·업무 입력 검증 및 수정 메서드는 후속 작업. public 무인자 생성자·전체 setter·엔티티 toString은 제공하지 않음.
+- 1차에서는 기본 ddl-auto none 유지. 영구 validate 설정 전환과 실제 저장·조회는 2차 체크포인트.
+
+
+### 1차 검증 기록 — 2026-11-11
+
+- Java 21 clean compileJava bootJar 성공. 자동화 테스트 코드 추가·실행 없음.
+- 업무 엔티티 8개의 매핑 컬럼을 V1과 정적 대조. 의도적으로 제외한 allowance_month_id 외 누락 없음.
+- 검증용 실행에서만 ddl-auto=validate를 지정하여 실제 MySQL V1 스키마와 대조·기동 성공. 일반 설정은 none 유지.
+- 검증용 localhost:13316 SSH 터널과 HTTP 18080 사용 후 종료. 기존 사용자 터널·실행 프로세스는 종료하지 않음.
+- 검증 전후 DB 테이블 목록 동일. 이번 단계는 저장/수정·Repository·감사 시각 콜백의 실제 동작 확인을 포함하지 않음(2차 범위).
