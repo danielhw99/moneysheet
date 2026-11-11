@@ -32,10 +32,7 @@ test {
 
 // Migration tooling is isolated from the application runtime and bootJar.
 sourceSets {
-    migration {
-        java.srcDir 'src/migration/java'
-        resources.srcDir 'src/migration/resources'
-    }
+    migration {}
 }
 
 dependencies {

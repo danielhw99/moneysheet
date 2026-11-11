@@ -83,11 +83,27 @@ MIGRATION_DB_PASSWORD=<서버 MIGRATION_PASSWORD 값>
 clean 금지·스키마 자동 생성 금지·자동 baseline 금지·적용 전 검증 및 파일명 검증을 사용합니다.
 clean/baseline/repair 명령은 제공하지 않습니다.
 
-1차에서는 SQL이 없으므로 info/validate는 연결·빈 이력 확인용이며, 스키마 검증 완료를 뜻하지 않습니다.
-SQL 없는 migrate는 거부합니다. 2차에서 최초 SQL을 `src/migration/resources/db/migration/V1__init_schema.sql`에 추가합니다.
+최초 SQL은 `src/migration/resources/db/migration/V1__init_schema.sql`에 있습니다.
+신규 SQL이 PENDING인 상태에서 단독 dbValidate는 실패할 수 있습니다. dbInfo로 상태를 확인한 후,
+승인·백업이 완료된 대상에 dbMigrate를 실행하고 dbInfo/dbValidate로 적용 결과를 확인합니다.
+migrate 자체의 적용 전 검증은 활성화되어 있습니다. SQL 없는 migrate는 거부합니다.
 마이그레이션 파일은 앱 JAR에 포함하지 않고 Gradle 작업 소스와 함께 관리합니다. 운영 실행 패키징은 배포 단계에서 정합니다.
 
 적용 전 대상 DB·기존 테이블/데이터·Flyway 이력을 재확인하고 백업합니다.
 비어 있지 않은 DB에 이력이 없으면 자동 baseline으로 우회하지 않습니다.
 MySQL DDL 실패는 일부 변경을 남길 수 있으므로 실패 시 재실행·repair·테이블 삭제를 자동 수행하지 않습니다.
 서버 실제 .env는 Git에 포함하지 않으며 로그 공유 전 비밀값을 확인합니다.
+
+
+### 2차 체크포인트 적용 기록 — 2026-11-11
+
+- 대상: Ubuntu 개발 DB `moneysheet_dev`. 적용 직전 업무 테이블·Flyway 이력이 없는 빈 스키마임을 확인.
+- 적용 전 백업: `/home/danielhw99/moneysheet-db-dev/recovery/20261111T081151Z-before-flyway-v1/moneysheet_dev-before-v1.sql` (권한 600, SHA-256 기록). 백업 복원 실습은 이번 작업에서 미수행.
+- 최초 SQL은 승인된 ERDCloud DDL과 CREATE TABLE 본문이 동일. 업무 테이블 8개·제약·인덱스·고정여유비 생성 컬럼 반영.
+- 마이그레이션 계정으로 V1 적용 성공. 재실행은 up to date, info는 SUCCESS, validate는 1개 성공.
+- DB 확인: 업무 테이블 8개 + flyway_schema_history, V1 성공 이력 1개, 설치 계정 moneysheet_migration.
+- 트랜잭션 내 수동 검증 20항목: 일반 고정비 복수/생성 컬럼 NULL, 고정여유비 월 연결/중복 거부/미존재 허용, 금액 0/상한/초과, 월 중복/월초 날짜, 식비 0/READY 미입력/DRAFT 미입력, 메모 미완료/당일 완료/이전 날짜/다른 월/초 단위, FK 누락/참조 중 삭제, 이메일 중복.
+- 검증 입력은 전부 롤백, 업무 테이블 행 수 모두 0. 롤백해도 AUTO_INCREMENT 번호에 빈 구간이 생길 수 있으며 연속성을 요구하지 않음.
+- Gradle 기본 리소스 경로를 중복 등록한 문제는 제거. 단독 validate의 PENDING 거부는 검증 완화 없이 실행 순서를 바로잡음.
+- JPA 엔티티·업무 API는 아직 미구현. ddl-auto는 none 유지. 적용된 V1 파일을 수정하지 않고 후속 스키마 변경은 V2 이상으로 추가.
+- 자동화 테스트 코드는 추가·실행하지 않음. 위 기록은 실제 수동 DB/명령 검증 결과.
