@@ -30,6 +30,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Object> handleApiException(ApiException exception, HttpServletRequest request) {
+        LOGGER.warn("API exception: traceId={}, code={}, message={}",
+                TraceIdFilter.getOrCreateTraceId(request), exception.getErrorCode(),
+                exception.getErrorCode().getMessage());
         HttpHeaders headers = new HttpHeaders();
         if (exception.getRetryAfterSeconds() != null) {
             headers.set(HttpHeaders.RETRY_AFTER, exception.getRetryAfterSeconds().toString());

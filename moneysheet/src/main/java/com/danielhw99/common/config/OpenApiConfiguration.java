@@ -3,6 +3,7 @@ package com.danielhw99.common.config;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 
 import com.danielhw99.common.error.ApiError;
@@ -28,7 +29,8 @@ public class OpenApiConfiguration {
     @Bean
     public OpenAPI moneySheetOpenApi() {
         ResolvedSchema error = ModelConverters.getInstance().resolveAsResolvedSchema(new AnnotatedType(ApiError.class));
-        Components components = new Components().schemas(new LinkedHashMap<>(error.referencedSchemas))
+        Components components = new Components().schemas(new LinkedHashMap<>(
+                error.referencedSchemas != null ? error.referencedSchemas : Collections.emptyMap()))
                 .addSchemas("ApiError", error.schema);
         return new OpenAPI().info(new Info().title("MoneySheet API").version("v1")
                 .description("개발용 API 문서입니다. 실제 구현된 API만 표시합니다. "
