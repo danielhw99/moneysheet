@@ -164,3 +164,14 @@ MySQL DDL 실패는 일부 변경을 남길 수 있으므로 실패 시 재실�
 - ApiException의 RATE_LIMITED는 양수 재시도 초를 필수로 받아 Retry-After 헤더 반환. 실제 인증·CSRF·요청 제한 필터 구현은 후속 범위.
 - 인증 필터/서블릿 컨테이너에서 MVC 밖으로 발생한 오류는 Advice 범위 밖. 인증 필터 연결은 인증 이슈에서 구현.
 - 업무 Controller·검증용 endpoint·Swagger·전역 데이터 변환은 이번 1차 범위에서 추가하지 않음. 수동 HTTP 검증용 코드는 저장소 밖에서만 실행.
+
+
+### API 1차 검증 기록 — 2026-11-11
+
+- Java 21 clean compileJava bootJar 성공. 제품 테스트 코드·업무 Controller 추가 없음.
+- 저장소 외부 임시 Controller로 실제 HTTP 확인: 정상 DTO 직접 반환, 204 빈 본문, 잘못된 JSON/필드 검증/타입/필수값(400), 미존재 경로(404), 메서드(405·Allow 유지), 미지원 미디어(415), 업무 충돌(409), 요청 제한 형식(429·Retry-After), 예상하지 못한 오류(500).
+- 오류 10종의 code/message/fieldErrors/traceId 형식·JSON·no-store 확인. fieldErrors는 해당 없으면 빈 배열. 입력값·기본 바인딩 메시지·예외 원문 미노출.
+- 응답 헤더 X-Trace-Id는 하나이며 오류 본문과 동일. 정상 요청에서 MDC 값과 일치, 요청별 UUID 상이, 외부 X-Trace-Id 무시 확인.
+- 실행 환경 DEBUG 설정으로 Spring의 예외 원문 DEBUG 로그가 나오는 것을 발견해 org.springframework.web=INFO 및 Hibernate SQL/bind/extract 로그 OFF를 명시. 재검증에서 예외 원문 미출력 확인. 운영에서 로깅 수준을 다시 높이거나 별도 로거를 추가하면 비밀값 노출을 재점검해야 함.
+- 임시 Controller는 앱 JAR에 미포함. DB 테이블·Flyway 이력 동일. 검증용 BE와 SSH 터널 종료.
+- Bean Validation 의존성/상세 규칙, ID·날짜 등 변환, Swagger UI는 2차 범위. 인증·CSRF·실제 요청 제한 기능은 미구현.
