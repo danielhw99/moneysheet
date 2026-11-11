@@ -151,3 +151,55 @@ MySQL DDL 실패는 일부 변경을 남길 수 있으므로 실패 시 재실�
 - 검증 전후 업무 행 수 모두 0, 스키마 지문·Flyway 이력 동일. AUTO_INCREMENT 번호는 롤백 후에도 증가할 수 있어 스키마 지문에서 카운터 값만 제외.
 - 검증 코드는 앱 JAR에 포함되지 않음. 일반 앱 JAR에도 Flyway 실행기/라이브러리가 없고, V1 SQL·DB 스키마 변경 없음.
 - 검증용 BE·SSH 터널 종료. 기존 사용자 실행 프로세스와 터널은 유지.
+
+
+## API 공통 처리 — 이슈 #10 / 1차 체크포인트
+
+- 성공 DTO 직접 반환·204 본문 없음 유지. ApiResponse 래퍼·ResponseBodyAdvice는 추가하지 않음.
+- common.error: ApiError(code/message/fieldErrors/traceId), ApiFieldError, 계약 ErrorCode, ApiException, GlobalExceptionHandler.
+- Spring MVC 입력/본문/경로/메서드 오류와 업무 ApiException을 공통 JSON으로 변환. HTTP 상태·Allow/Accept 등 원래 헤더 유지. fieldErrors는 해당 없으면 빈 배열.
+- 필드 오류에 rejectedValue나 예외 원문을 넣지 않음. 1차 필드 메시지는 안전한 공통 문구이며 상세 검증 규칙은 2차에 연결.
+- 예기치 않은 예외는 INTERNAL_ERROR로 응답. 서버 오류 로그에도 추적 ID·예외 클래스만 기록하며 예외 메시지·SQL·스택을 직접 출력하지 않음.
+- common.web.TraceIdFilter: 서버 UUID 생성, 응답 X-Trace-Id와 오류 본문 traceId 일치. 외부 헤더를 신뢰하지 않으며 요청 종료 후 MDC 복원/정리.
+- ApiException의 RATE_LIMITED는 양수 재시도 초를 필수로 받아 Retry-After 헤더 반환. 실제 인증·CSRF·요청 제한 필터 구현은 후속 범위.
+- 인증 필터/서블릿 컨테이너에서 MVC 밖으로 발생한 오류는 Advice 범위 밖. 인증 필터 연결은 인증 이슈에서 구현.
+- 업무 Controller·검증용 endpoint·Swagger·전역 데이터 변환은 이번 1차 범위에서 추가하지 않음. 수동 HTTP 검증용 코드는 저장소 밖에서만 실행.
+
+
+### API 1차 검증 기록 — 2026-11-11
+
+- Java 21 clean compileJava bootJar 성공. 제품 테스트 코드·업무 Controller 추가 없음.
+- 저장소 외부 임시 Controller로 실제 HTTP 확인: 정상 DTO 직접 반환, 204 빈 본문, 잘못된 JSON/필드 검증/타입/필수값(400), 미존재 경로(404), 메서드(405·Allow 유지), 미지원 미디어(415), 업무 충돌(409), 요청 제한 형식(429·Retry-After), 예상하지 못한 오류(500).
+- 오류 10종의 code/message/fieldErrors/traceId 형식·JSON·no-store 확인. fieldErrors는 해당 없으면 빈 배열. 입력값·기본 바인딩 메시지·예외 원문 미노출.
+- 응답 헤더 X-Trace-Id는 하나이며 오류 본문과 동일. 정상 요청에서 MDC 값과 일치, 요청별 UUID 상이, 외부 X-Trace-Id 무시 확인.
+- 실행 환경 DEBUG 설정으로 Spring의 예외 원문 DEBUG 로그가 나오는 것을 발견해 org.springframework.web=INFO 및 Hibernate SQL/bind/extract 로그 OFF를 명시. 재검증에서 예외 원문 미출력 확인. 운영에서 로깅 수준을 다시 높이거나 별도 로거를 추가하면 비밀값 노출을 재점검해야 함.
+- 임시 Controller는 앱 JAR에 미포함. DB 테이블·Flyway 이력 동일. 검증용 BE와 SSH 터널 종료.
+- Bean Validation 의존성/상세 규칙, ID·날짜 등 변환, Swagger UI는 2차 범위. 인증·CSRF·실제 요청 제한 기능은 미구현.
+
+
+## API 입력·출력·Swagger — 이슈 #10 / 2차 체크포인트
+
+- Boot 4.1.2의 Jackson 3 API 사용. springdoc-openapi 3.2.0을 명시 고정, Bean Validation은 Boot BOM 관리.
+- DTO ID는 ApiId를 사용해 JSON 숫자 문자열로 직렬화. JSON 숫자 ID·0·음수·선행 0·Long 범위 초과 거부. 필수 ID는 DTO 필드에 @NotNull 추가, 선택 ID는 null 허용. 모든 Long을 문자열로 바꾸지 않음.
+- 입력 금액 Long에는 @MoneyAmount 적용: 필수·1~9,999,999,999원. JSON 문자열 금액·소수→정수 강제 변환 거부. 부호 있는 합계에는 MoneyAmount를 적용하지 않음.
+- JSON·query/path의 LocalDate yyyy-MM-dd, LocalTime HH:mm, YearMonth yyyy-MM 형식을 엄격하게 처리. 잘못된 날짜·초 단위 시간·형식 축약 거부. LocalDateTime 메타데이터 형식은 이번 범위에서 변경하지 않음.
+- API ENUM은 DB ENUM과 별도 DTO enum으로 구현하고 ApiEnum.getValue에 계약 값을 명시. JSON 역직렬화용 @JsonCreator 팩토리에서 ApiEnum.fromValue를 호출. MVC query/path는 직접 선언한 ApiEnum 구현 enum 매개변수에 엄격한 바인딩 적용. 선택 필터는 @RequestParam(required=false) enum으로 선언하고 Optional/컬렉션 래퍼 바인딩은 이번 공통 도구 범위에 포함하지 않음. DB enum/ErrorCode를 전역 소문자로 변경하지 않음.
+- 이름·제목·닉네임은 DTO에서 ApiText.normalize를 명시 호출하고 @NotBlank/@Size 등 제약을 선언. 전역 String trim은 없으며 비밀번호에는 normalize를 사용하지 않음.
+- 승인 계약의 additionalProperties=false에 맞춰 알 수 없는 JSON 필드 거부. nullable 필드의 필수 키 존재 여부는 각 업무 DTO의 @JsonProperty(required=true) 등으로 후속 구현 시 명시.
+- local 프로필에서만 Swagger UI /swagger-ui/index.html, /v3/api-docs 활성화. 기본/운영 프로필은 비활성. 문서 API 경로는 업무 API prefix와 별개.
+- 현재 실제 업무 Controller가 없으므로 문서 paths가 비어 있는 것이 정상. 승인된 openapi.json의 미구현 endpoint를 생성 문서로 복사하지 않음. 생성 OpenAPI 3.0 문서와 설계 계약의 endpoint/필드/제약을 기능 구현 시 대조.
+- 세션·CSRF 요청 지원과 사용자별 소유권·월 상태·금액 합계 검증은 인증/업무 API 구현 단계. API 기반 도구 존재만으로 업무 검증 완료를 뜻하지 않음.
+
+
+### API 2차 검증 기록 — 2026-11-12
+
+- Java 21 클린 컴파일/bootJar 및 실제 기동 확인. 실제 업무 API·자동화 테스트 소스는 추가하지 않음.
+- 저장소 외부 임시 DTO/Controller로 실제 HTTP 확인. 정상 ID/금액/날짜/시간/월/ENUM 왕복, 제목 앞뒤 공백 제거, 비밀번호 공백 유지, 부호 있는 안전 정수 합계의 숫자 반환 확인.
+- JSON 입력 거부 32항목: 숫자/0/음수/선행 0/범위 초과/NULL/공백 ID, 금액 0/음수/상한 초과/소수/실수/문자열/불리언/NULL, 잘못된 날짜·윤년·축약·타임스탬프, 24시·초 단위·축약·숫자 시간, 잘못된 월, 대문자/미정 ENUM, 공백/숫자 제목, 미정 필드, 필수 ID/금액 누락. 공통 VALIDATION 400 형식 확인.
+- 금액 1원/9,999,999,999원 허용. query/path의 정상 형식과 잘못된 ID/날짜/시간/월/ENUM 5종 거부 확인.
+- Spring 바인딩의 enum 이름 fallback을 확인하여 ApiEnumBinding의 전용 편집기로 API enum 이름 우회 입력을 차단. DB enum·오류 코드는 전역 변환하지 않음.
+- 기존 500 오류 코드 대문자·예외 원문 미노출 및 204 빈 본문 유지 확인.
+- Swagger 생성 문서: ID 문자열·정수 금액 상하한·camelCase enum·날짜/시간/월 패턴·오류 필수 필드·additionalProperties=false 확인. 미지정 자유형 Map 스키마는 DTO 제한 대상으로 바꾸지 않음.
+- 실제 제품 앱의 local 프로필에서 UI·OpenAPI 200 및 업무 paths 빈 상태 확인. 비local 프로필에서 /v3/api-docs(.yaml 포함)·swagger-config·/swagger-ui/index.html·/swagger-ui.html 모두 404 확인.
+- 승인된 계약 v0.1.1의 경계 규칙과 대조. 전체 42개 업무 API의 HTTP 구현/정합성 검증 완료를 뜻하지 않음.
+- DB 테이블·Flyway 이력 변경 없음. 검증용 앱·터널 종료. UI를 직접 보려면 IDE Gradle 새로고침 후 local 앱 재실행, 기존 SSH 터널 유지.
