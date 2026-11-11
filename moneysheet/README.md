@@ -151,3 +151,16 @@ MySQL DDL 실패는 일부 변경을 남길 수 있으므로 실패 시 재실�
 - 검증 전후 업무 행 수 모두 0, 스키마 지문·Flyway 이력 동일. AUTO_INCREMENT 번호는 롤백 후에도 증가할 수 있어 스키마 지문에서 카운터 값만 제외.
 - 검증 코드는 앱 JAR에 포함되지 않음. 일반 앱 JAR에도 Flyway 실행기/라이브러리가 없고, V1 SQL·DB 스키마 변경 없음.
 - 검증용 BE·SSH 터널 종료. 기존 사용자 실행 프로세스와 터널은 유지.
+
+
+## API 공통 처리 — 이슈 #10 / 1차 체크포인트
+
+- 성공 DTO 직접 반환·204 본문 없음 유지. ApiResponse 래퍼·ResponseBodyAdvice는 추가하지 않음.
+- common.error: ApiError(code/message/fieldErrors/traceId), ApiFieldError, 계약 ErrorCode, ApiException, GlobalExceptionHandler.
+- Spring MVC 입력/본문/경로/메서드 오류와 업무 ApiException을 공통 JSON으로 변환. HTTP 상태·Allow/Accept 등 원래 헤더 유지. fieldErrors는 해당 없으면 빈 배열.
+- 필드 오류에 rejectedValue나 예외 원문을 넣지 않음. 1차 필드 메시지는 안전한 공통 문구이며 상세 검증 규칙은 2차에 연결.
+- 예기치 않은 예외는 INTERNAL_ERROR로 응답. 서버 오류 로그에도 추적 ID·예외 클래스만 기록하며 예외 메시지·SQL·스택을 직접 출력하지 않음.
+- common.web.TraceIdFilter: 서버 UUID 생성, 응답 X-Trace-Id와 오류 본문 traceId 일치. 외부 헤더를 신뢰하지 않으며 요청 종료 후 MDC 복원/정리.
+- ApiException의 RATE_LIMITED는 양수 재시도 초를 필수로 받아 Retry-After 헤더 반환. 실제 인증·CSRF·요청 제한 필터 구현은 후속 범위.
+- 인증 필터/서블릿 컨테이너에서 MVC 밖으로 발생한 오류는 Advice 범위 밖. 인증 필터 연결은 인증 이슈에서 구현.
+- 업무 Controller·검증용 endpoint·Swagger·전역 데이터 변환은 이번 1차 범위에서 추가하지 않음. 수동 HTTP 검증용 코드는 저장소 밖에서만 실행.
