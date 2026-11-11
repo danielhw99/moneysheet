@@ -1,0 +1,10 @@
+server:
+  address: 127.0.0.1
+  port: 8080
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:13306/moneysheet_dev?sslMode=REQUIRED}
+    username: ${DB_USERNAME:moneysheet_app}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
