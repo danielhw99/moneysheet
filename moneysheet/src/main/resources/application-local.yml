@@ -8,3 +8,9 @@ spring:
     username: ${DB_USERNAME:moneysheet_app}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

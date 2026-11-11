@@ -20,3 +20,14 @@ logging:
     org.hibernate.SQL: "OFF"
     org.hibernate.orm.jdbc.bind: "OFF"
     org.hibernate.orm.jdbc.extract: "OFF"
+
+springdoc:
+  api-docs:
+    enabled: false
+    version: openapi_3_0
+  swagger-ui:
+    enabled: false
+    disable-swagger-default-url: true
+    persist-authorization: false
+  paths-to-match: /api/v1/**
+  override-with-generic-response: false
