@@ -18,11 +18,15 @@ public class SessionExpiryFilter extends OncePerRequestFilter {
         var auth=SecurityContextHolder.getContext().getAuthentication();
         var session=request.getSession(false);
         if(session!=null && auth!=null && auth.getPrincipal() instanceof AuthPrincipal) {
-            Instant now=clock.instant();
-            Object login=session.getAttribute(LOGIN_AT), seen=session.getAttribute(LAST_SEEN);
-            if(SessionWindow.expired(login instanceof Instant i?i:null,seen instanceof Instant i?i:null,now)) {
-                session.invalidate();SecurityContextHolder.clearContext();
-            } else session.setAttribute(LAST_SEEN,now);
+            try {
+                Instant now=clock.instant();
+                Object login=session.getAttribute(LOGIN_AT), seen=session.getAttribute(LAST_SEEN);
+                if(SessionWindow.expired(login instanceof Instant i?i:null,seen instanceof Instant i?i:null,now)) {
+                    session.invalidate();SecurityContextHolder.clearContext();
+                } else session.setAttribute(LAST_SEEN,now);
+            } catch (IllegalStateException invalidated) {
+                SecurityContextHolder.clearContext();
+            }
         }
         chain.doFilter(request,response);
     }
