@@ -68,4 +68,10 @@ public class FixedBudgetItem extends BaseEntity {
     public Long getAmount() {
         return amount;
     }
+
+    public void update(Category category, String name, long amount) {
+        this.category = category;
+        this.name = name;
+        this.amount = amount;
+    }
 }

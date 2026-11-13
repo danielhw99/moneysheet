@@ -83,4 +83,15 @@ public class MonthlyBudget extends BaseEntity {
     public Long getFoodSunday() {
         return foodSunday;
     }
+
+    public void finishSetup(long weekday, long saturday, long sunday) {
+        updateFood(weekday, saturday, sunday);
+        setupStatus = BudgetSetupStatus.READY;
+    }
+
+    public void updateFood(long weekday, long saturday, long sunday) {
+        foodWeekday = weekday;
+        foodSaturday = saturday;
+        foodSunday = sunday;
+    }
 }
