@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,5 +43,38 @@ public class BudgetController {
                                                      @RequestBody BudgetDtos.SetupInput input) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(service.setup(principal.userId(), ApiFormats.parseMonth(month), input));
+    }
+
+    @PutMapping("/food-budget")
+    public ResponseEntity<BudgetDtos.Summary> updateFood(@AuthenticationPrincipal AuthPrincipal principal,
+                                                          @PathVariable String month,
+                                                          @RequestBody BudgetDtos.Food input) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(service.updateFood(principal.userId(), ApiFormats.parseMonth(month), input));
+    }
+
+    @PostMapping("/budget-items")
+    public ResponseEntity<BudgetDtos.Item> createItem(@AuthenticationPrincipal AuthPrincipal principal,
+                                                       @PathVariable String month,
+                                                       @RequestBody BudgetDtos.ItemInput input) {
+        return ResponseEntity.status(201).cacheControl(CacheControl.noStore())
+                .body(service.createItem(principal.userId(), ApiFormats.parseMonth(month), input));
+    }
+
+    @PutMapping("/budget-items/{id}")
+    public ResponseEntity<BudgetDtos.Item> updateItem(@AuthenticationPrincipal AuthPrincipal principal,
+                                                       @PathVariable String month, @PathVariable String id,
+                                                       @RequestBody BudgetDtos.ItemInput input) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(service.updateItem(principal.userId(), ApiFormats.parseMonth(month),
+                        com.danielhw99.common.api.ApiId.parse(id).value(), input));
+    }
+
+    @DeleteMapping("/budget-items/{id}")
+    public ResponseEntity<Void> deleteItem(@AuthenticationPrincipal AuthPrincipal principal,
+                                            @PathVariable String month, @PathVariable String id) {
+        service.deleteItem(principal.userId(), ApiFormats.parseMonth(month),
+                com.danielhw99.common.api.ApiId.parse(id).value());
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 }

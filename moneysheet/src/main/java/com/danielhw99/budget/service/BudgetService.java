@@ -17,6 +17,8 @@ import com.danielhw99.budget.api.BudgetDtos.SetupInput;
 import com.danielhw99.budget.api.BudgetDtos.Summary;
 import com.danielhw99.budget.api.BudgetDtos.ItemSummary;
 import com.danielhw99.budget.api.BudgetDtos.FoodSummary;
+import com.danielhw99.budget.api.BudgetDtos.Item;
+import com.danielhw99.budget.api.BudgetDtos.ItemInput;
 import com.danielhw99.budget.entity.BudgetSetupStatus;
 import com.danielhw99.budget.entity.FixedBudgetItem;
 import com.danielhw99.budget.entity.FixedBudgetKind;
@@ -191,5 +193,68 @@ public class BudgetService {
 
     private FixedBudgetKind entityKind(Kind kind) {
         return kind == Kind.FREE_ALLOWANCE ? FixedBudgetKind.FREE_ALLOWANCE : FixedBudgetKind.FIXED_EXPENSE;
+    }
+
+    @Transactional
+    public Summary updateFood(Long userId, YearMonth month, Food food) {
+        MonthlyBudget budget = writableReady(userId, month);
+        validateFood(food);
+        budget.updateFood(food.weekday(), food.saturday(), food.sunday());
+        return summary(budget, month);
+    }
+
+    @Transactional
+    public Item createItem(Long userId, YearMonth month, ItemInput input) {
+        MonthlyBudget budget = writableReady(userId, month);
+        if (input == null) throw new ApiException(ErrorCode.VALIDATION);
+        validateItem(input.kind(), input.name(), input.categoryId(), input.amount());
+        if (input.kind() == Kind.FREE_ALLOWANCE && items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())
+                .stream().anyMatch(item -> item.getKind() == FixedBudgetKind.FREE_ALLOWANCE))
+            throw new ApiException(ErrorCode.CONFLICT);
+        Category category = fixedCategory(userId, input.categoryId());
+        FixedBudgetItem saved = items.saveAndFlush(new FixedBudgetItem(budget, category, entityKind(input.kind()),
+                input.name().strip(), input.amount()));
+        return itemResponse(saved);
+    }
+
+    @Transactional
+    public Item updateItem(Long userId, YearMonth month, Long id, ItemInput input) {
+        MonthlyBudget budget = writableReady(userId, month);
+        FixedBudgetItem item = ownedItem(budget, id);
+        if (input == null) throw new ApiException(ErrorCode.VALIDATION);
+        validateItem(input.kind(), input.name(), input.categoryId(), input.amount());
+        if (kind(item.getKind()) != input.kind()) throw new ApiException(ErrorCode.VALIDATION);
+        if (item.getKind() == FixedBudgetKind.FIXED_EXPENSE
+                && input.amount() < payments.sumAmountByItemId(id)) throw new ApiException(ErrorCode.BUDGET_BELOW_PAID);
+        item.update(fixedCategory(userId, input.categoryId()), input.name().strip(), input.amount());
+        return itemResponse(item);
+    }
+
+    @Transactional
+    public void deleteItem(Long userId, YearMonth month, Long id) {
+        MonthlyBudget budget = writableReady(userId, month);
+        FixedBudgetItem item = ownedItem(budget, id);
+        if (payments.existsByFixedBudgetItem_Id(id)) throw new ApiException(ErrorCode.REFERENCED);
+        items.delete(item);
+    }
+
+    private MonthlyBudget writableReady(Long userId, YearMonth month) {
+        calendar.requireWritable(month);
+        users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1))
+                .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
+        requireReady(budget);
+        return budget;
+    }
+
+    private FixedBudgetItem ownedItem(MonthlyBudget budget, Long id) {
+        if (id == null || id < 1) throw new ApiException(ErrorCode.VALIDATION);
+        return items.findById(id).filter(item -> item.getMonthlyBudget().getId().equals(budget.getId()))
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+    }
+
+    private Item itemResponse(FixedBudgetItem item) {
+        return new Item(new ApiId(item.getId()), kind(item.getKind()), item.getName(),
+                new ApiId(item.getCategory().getId()), item.getAmount());
     }
 }
