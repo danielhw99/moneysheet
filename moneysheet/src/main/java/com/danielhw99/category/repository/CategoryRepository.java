@@ -5,6 +5,7 @@ import com.danielhw99.category.entity.CategoryDirection;
 import com.danielhw99.category.entity.CategoryScope;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -17,4 +18,7 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     List<Category> findByUser_IdAndScopeAndDirectionOrderByIdAsc(
             Long userId, CategoryScope scope, CategoryDirection direction);
+
+    Optional<Category> findByUser_IdAndScopeAndDirectionAndNameKey(
+            Long userId, CategoryScope scope, CategoryDirection direction, String nameKey);
 }

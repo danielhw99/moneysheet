@@ -1,7 +1,9 @@
 package com.danielhw99.category;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,6 +17,7 @@ import com.danielhw99.auth.security.SecurityConfiguration;
 import com.danielhw99.auth.security.SecurityErrorWriter;
 import com.danielhw99.auth.security.SessionExpiryFilter;
 import com.danielhw99.category.api.CategoryController;
+import com.danielhw99.category.api.CategoryInput;
 import com.danielhw99.category.api.CategoryDirectionValue;
 import com.danielhw99.category.api.CategoryResponse;
 import com.danielhw99.category.api.CategoryScopeValue;
@@ -33,6 +36,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 
 @WebMvcTest(CategoryController.class)
 @Import({SecurityConfiguration.class, SecurityErrorWriter.class, ApiJsonConfiguration.class, TraceIdFilter.class})
@@ -79,6 +84,44 @@ class CategoryMvcTest {
         mvc.perform(get("/api/v1/categories"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    void postCreatesWith200AndNoStore() throws Exception {
+        when(categories.createOrReuse(org.mockito.ArgumentMatchers.eq(7L), any(CategoryInput.class)))
+                .thenReturn(new CategoryResponse(new ApiId(103L), "Housing", CategoryScopeValue.FIXED_BUDGET, null));
+        mvc.perform(post("/api/v1/categories").session(session(7L))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Housing\",\"scope\":\"fixedBudget\",\"direction\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.id").value("103"))
+                .andExpect(jsonPath("$.direction").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void invalidPostBodyIsRejected() throws Exception {
+        for (String body : List.of(
+                "{\"name\":\"Rent\",\"scope\":\"fixedBudget\"}",
+                "{\"name\":\"Rent\",\"scope\":\"fixedBudget\",\"direction\":null,\"extra\":1}",
+                "{\"name\":\"\",\"scope\":\"fixedBudget\",\"direction\":null}",
+                "{\"name\":\"Rent\",\"scope\":\"bad\",\"direction\":null}")) {
+            mvc.perform(post("/api/v1/categories").session(session(7L))
+                            .with(SecurityMockMvcRequestPostProcessors.csrf())
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    void postRequiresSessionAndCsrf() throws Exception {
+        String body = "{\"name\":\"Rent\",\"scope\":\"fixedBudget\",\"direction\":null}";
+        mvc.perform(post("/api/v1/categories").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/categories").session(session(7L))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
     }
 
     private MockHttpSession session(Long userId) {
