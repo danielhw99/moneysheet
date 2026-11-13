@@ -20,6 +20,7 @@ import static org.mockito.Mockito.*;
 class AuthMvcTest {
  @Autowired MockMvc mvc;
  @MockitoBean SignupService signup;
+ @MockitoBean com.danielhw99.auth.security.AuthRateLimiter limiter;
  @MockitoBean com.danielhw99.user.repository.UserRepository users;
  @MockitoBean com.danielhw99.auth.service.LoginService login;
  @Test void suppliesCsrfAndCommonUnauthorizedResponse() throws Exception {
@@ -82,5 +83,12 @@ class AuthMvcTest {
   mvc.perform(post("/api/v1/auth/login").with(csrf()).contentType("application/json")
    .content("{\"email\":\"user@example.com\",\"password\":\"incorrect\"}"))
    .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+ }
+
+ @Test void rateFilterReturnsContractAndRetryAfter() throws Exception {
+  doThrow(new com.danielhw99.common.error.ApiException(com.danielhw99.common.error.ErrorCode.RATE_LIMITED,60L)).when(limiter).request(anyString(),eq(false));
+  mvc.perform(post("/api/v1/auth/login").with(csrf()).contentType("application/json").content("{}"))
+    .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After","60"))
+    .andExpect(jsonPath("$.code").value("RATE_LIMITED")).andExpect(jsonPath("$.traceId").isNotEmpty());
  }
 }

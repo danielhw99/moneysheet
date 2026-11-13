@@ -1,6 +1,7 @@
 package com.danielhw99.auth.service;
 import com.danielhw99.auth.dto.LoginInput;
 import com.danielhw99.auth.security.AuthPrincipal;
+import com.danielhw99.auth.security.AuthRateLimiter;
 import com.danielhw99.common.error.ApiException;
 import com.danielhw99.common.error.ErrorCode;
 import com.danielhw99.user.repository.UserRepository;
@@ -11,8 +12,9 @@ public class LoginService {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final String dummyHash;
-    public LoginService(UserRepository users, PasswordEncoder encoder) {
-        this.users=users; this.encoder=encoder;
+    private final AuthRateLimiter limiter;
+    public LoginService(UserRepository users, PasswordEncoder encoder, AuthRateLimiter limiter) {
+        this.users=users; this.encoder=encoder;this.limiter=limiter;
         this.dummyHash=encoder.encode(java.util.UUID.randomUUID().toString());
     }
     public AuthPrincipal authenticate(LoginInput input) {
@@ -20,9 +22,14 @@ public class LoginService {
                 || input.password().codePointCount(0,input.password().length())>128) {
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
+        limiter.checkAccount(input.email());
         var user=users.findByEmailKey(input.email());
         boolean matches=encoder.matches(input.password(),user.map(u->u.getPasswordHash()).orElse(dummyHash));
-        if (!matches || user.isEmpty()) throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
+        if (!matches || user.isEmpty()) {
+            limiter.failed(input.email());
+            throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
+        }
+        limiter.succeeded(input.email());
         return AuthPrincipal.from(user.orElseThrow());
     }
 }

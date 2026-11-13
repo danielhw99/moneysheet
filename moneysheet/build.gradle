@@ -60,3 +60,31 @@ dependencies {
         args operation
     }
 }
+
+// Fast tests do not require Docker. Full check intentionally requires a Docker host.
+sourceSets {
+    integrationTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+        resources.srcDir 'src/migration/resources'
+    }
+}
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+dependencies {
+    integrationTestImplementation 'org.testcontainers:testcontainers-mysql'
+    integrationTestImplementation 'org.flywaydb:flyway-core'
+    integrationTestRuntimeOnly 'org.flywaydb:flyway-mysql'
+}
+tasks.register('integrationTest', Test) {
+    description = 'Run isolated MySQL integration tests (Docker required)'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter test
+    maxParallelForks = 1
+}
+tasks.named('check') { dependsOn tasks.named('integrationTest') }

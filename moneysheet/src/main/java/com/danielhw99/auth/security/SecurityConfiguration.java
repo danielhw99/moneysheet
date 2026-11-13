@@ -16,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 
 @Configuration(proxyBeanMethods=false)
@@ -34,7 +35,7 @@ public class SecurityConfiguration {
     }
     @Bean public SecurityFilterChain apiSecurity(HttpSecurity http, SecurityErrorWriter errors,
             Environment environment, HttpSessionSecurityContextRepository contexts,
-            HttpSessionCsrfTokenRepository csrfTokens, Clock clock) throws Exception {
+            HttpSessionCsrfTokenRepository csrfTokens, Clock clock, AuthRateLimiter limiter) throws Exception {
         http.formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable).requestCache(AbstractHttpConfigurer::disable)
                 .securityContext(context -> context.securityContextRepository(contexts))
@@ -51,6 +52,7 @@ public class SecurityConfiguration {
                     authorize.anyRequest().authenticated();
                 });
         http.addFilterAfter(new SessionExpiryFilter(clock), SecurityContextHolderFilter.class);
+        http.addFilterAfter(new AuthRateLimitFilter(limiter,errors), CsrfFilter.class);
         return http.build();
     }
 }

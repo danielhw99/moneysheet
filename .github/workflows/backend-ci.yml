@@ -1,0 +1,40 @@
+name: BE tests
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+permissions:
+  contents: read
+concurrency:
+  group: be-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    name: BE tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: moneysheet
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify Docker
+        run: docker info
+      - name: Test and build
+        run: bash ./gradlew check bootJar --no-daemon --console=plain
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: be-test-reports
+          path: |
+            moneysheet/build/reports/tests/
+            moneysheet/build/test-results/
+          retention-days: 7

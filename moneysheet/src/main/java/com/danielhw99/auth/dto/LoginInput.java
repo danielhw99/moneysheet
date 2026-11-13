@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 public record LoginInput(
         @NotBlank @Email @Pattern(regexp="^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$") @Size(max=254) String email,
-        @NotNull @Schema(accessMode=Schema.AccessMode.WRITE_ONLY) String password) {
+        @NotNull @Schema(accessMode=Schema.AccessMode.WRITE_ONLY,minLength=1,maxLength=128) String password) {
     public LoginInput { email=email==null?null:email.strip().toLowerCase(Locale.ROOT); }
     @Override public String toString() { return "LoginInput[REDACTED]"; }
 }

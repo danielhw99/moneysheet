@@ -204,19 +204,49 @@ MySQL DDL 실패는 일부 변경을 남길 수 있으므로 실패 시 재실�
 - 승인된 계약 v0.1.1의 경계 규칙과 대조. 전체 42개 업무 API의 HTTP 구현/정합성 검증 완료를 뜻하지 않음.
 - DB 테이블·Flyway 이력 변경 없음. 검증용 앱·터널 종료. UI를 직접 보려면 IDE Gradle 새로고침 후 local 앱 재실행, 기존 SSH 터널 유지.
 
-## ?? ?? ????? 1 ? 2026-11-13
+## 인증 구현 및 테스트 — 2026-11-13
 
-- ?????CSRF?Security ?? JSON ?? ??. ?? ?? ? ?? ????? ??.
-- ???????? ?? ??: `v1` (`moneysheet.auth.privacy-policy-version`?? ?? ??). ?? ??? ??.
-- ???? 15~128 Unicode ?????, ?? ??, Argon2id 19456 KiB/2?/??1. ??? ?? ?? ?? ???? ?? ??.
-- Windows Java 21: `gradlew.bat test`. DB?????SSH ?? ?? ? MVC ??? ??.
-- ?? ?? Secure/HttpOnly/SameSite=Lax, local HTTP??? Secure=false. ??? ?? ?? ?? ??.
-- ?????1 ?? ??? 8? ??. ????????? ??? ?? ???? ??.
+- API: GET `/api/v1/auth/csrf`, POST `/api/v1/auth/signup`, POST `/api/v1/auth/login`, POST `/api/v1/auth/logout`, GET `/api/v1/me`.
+- 가입 성공 201 후 자동 로그인하지 않음. 성공 응답은 Profile 직접 반환. 개인정보처리방침 현재 버전 `v1`, `moneysheet.auth.privacy-policy-version`으로 설정하며 서버 값과 다르면 거부.
+- 이메일 앞뒤 공백 제거·Locale.ROOT 소문자, 닉네임 앞뒤 공백 제거. 비밀번호는 변환하지 않음.
+- 비밀번호 15~128 Unicode 코드포인트, 초기 로컬 흔한 비밀번호 차단 목록. Argon2id 19456 KiB/2회/병렬1, salt16/hash32, `{argon2id}` 식별자 저장. BouncyCastle 1.86은 Boot BOM 관리 대상이 아니므로 명시 고정.
+- 제한된 초기 차단 목록은 전체 유출 비밀번호 사전을 대체하지 않음. 공개 운영 전 목록 확장 여부를 별도 검토.
+- 로그인은 가입 최소 길이를 소급 적용하지 않으며 128 코드포인트 상한 적용. 미등록 계정도 더미 해시 비교. 비밀번호·쿠키·CSRF 토큰 로그 금지.
+- CSRF 취득 → 가입 또는 로그인 POST에 응답의 headerName/token 전송. 로그인 성공 후 세션 ID가 교체되고 기존 CSRF 토큰은 폐기되므로 다시 취득.
+- GET me는 인증 사용자 ID로 DB 조회. POST logout은 유효한 CSRF로 현재 세션·쿠키를 폐기하고 본문 없는 204 반환.
+- 서버 메모리 세션, 유휴30분/최대12시간. 재시작 시 재로그인. 여러 기기 로그인 허용, 자동 로그인 없음. 비밀번호 해시는 세션에 보관하지 않음.
+- 운영 쿠키 Secure/HttpOnly/SameSite=Lax/Path=/, Domain 미설정. local HTTP에서만 Secure=false. Servlet 세션 추적은 cookie로 제한.
+- 프록시 헤더는 기본 신뢰하지 않음. 요청 제한은 직접 접속 remoteAddr 기준. Caddy 배포 전 신뢰 프록시/IP 처리 구성 및 위조 헤더 검증 필수. 현재 설정을 그대로 프록시 뒤에 두면 사용자들이 같은 IP 제한을 공유할 수 있음.
+- 로그인 IP 1분30회, 가입 IP 1시간10회. CSRF를 통과한 인증 POST를 계산. 계정15분 내5회 실패하면 이후15분 제한. 429/Retry-After 반환. 성공 시 계정 실패 초기화.
+- 카운터는 프로세스 메모리에 최대10,000키, TTL 경과 시 정리. 가득 차면 임의 제한 기록을 지우지 않고 신규 키 요청을 429로 거부. 재시작 시 초기화.
 
-## ?? ?? ????? 2 ? 2026-11-13
+### 테스트 실행
 
-- ??? ? ?? ID ?? ? CSRF ?? ??. GET /api/v1/auth/csrf ??? ? ?? ??.
-- GET /api/v1/me? ?? ??? ID? ??. POST logout? CSRF ?? ? ?? ????? ??, 204 ?? ??.
-- ?? 30?/?? 12??, ?? ??? ??. ??? ? ????. ?? ??? ??.
-- ??? ??? ?? Argon2id ??. ???? ?? ?? ??? ?? ???? ?? 128 ????? ??? ??.
-- ???? ??? ?? principal? ???? ??. Clock ?? ?? ??? MockMvc ?? ?? ??.
+Windows Java21 (Docker 불필요):
+```powershell
+.\gradlew.bat test
+```
+
+Ubuntu 또는 GitHub-hosted Ubuntu runner (Docker 필요):
+```bash
+bash ./gradlew integrationTest --no-daemon
+bash ./gradlew check bootJar --no-daemon
+```
+
+- test는 단위·MVC, integrationTest는 Testcontainers의 MySQL8.4.13을 생성하여 V1을 명시 적용하고 JPA validate 후 실제 가입·동시 가입·인증 흐름 검증.
+- 테스트 DB는 임시 `moneysheet_test`이며 개발 DB/비밀값/SSH 터널을 사용하지 않음. 테스트 DB 초기화만 DDL 허용, 일반 앱 Flyway 비활성화 및 migration 전용 실행은 유지.
+- Docker 미준비는 실패하며 자동으로 생략하지 않음. Testcontainers Ryuk으로 임시 자원 정리. 일반 앱 JAR에는 테스트/Flyway 실행 의존성이 들어가지 않음.
+- GitHub Actions `BE tests and build`가 PR의 전체 테스트·빌드를 실행하고 보고서를7일 보관. branch 보호 필수 검사 설정은 별도 확인 필요.
+- 1차 가입/보안 기반8개, 2차 세션 인증까지15개 빠른 테스트 통과. 최종 실행 수·결과는 PR 기록 참조.
+- 이메일 인증·분실 복구·계정 변경·탈퇴·FE 연동은 이번 범위 제외. local Swagger에서 구현된 API만 표시, 실제 세션 쿠키와 CSRF 헤더를 사용. 토큰을 문서 예시에 저장하지 않음.
+
+### 최종 검증 기록 — #12
+
+- Windows Java21: `test compileIntegrationTestJava bootJar` 성공, 빠른 테스트23개 통과.
+- Ubuntu 격리 환경: `check bootJar` 성공, 빠른 테스트23개 + MySQL 통합 테스트4개 통과.
+- 빈 임시 DB Flyway V1→JPA validate, 중복·동시 가입, 실제 DB 로그인, 계정 실패 제한, 실제 HTTP 세션 쿠키 교체·로그아웃 확인.
+- 임시 MySQL은 127.0.0.1 임의 포트만 사용. 테스트 컨테이너 정리 및 기존 개발 DB healthy 유지 확인. 개발 DB에 테스트 데이터를 쓰지 않음.
+- Argon2id 단일 encode 측정679ms(초기화 비용이 포함될 수 있는 참고 샘플). 부하·동시 로그인 성능 보장은 아니며 운영 자원 점검은 별도.
+- bootJar에서 Flyway·JUnit·Mockito·Testcontainers 및 검증용 클래스 제외 확인. 불필요한 Boot 기본 사용자 자동 생성도 차단.
+- STRICT boolean 문자열/숫자 자동 변환 거부, 요청 제한 저장소 상한·시간 경과 해제, Swagger 세션+CSRF AND 조건 회귀 검증.
+- CI 결과는 PR 체크에서 확인. 개발용 HTTP 쿠키 설정으로 실제 요청 검증했으며 운영 HTTPS·프록시·FE 연동은 배포/연동 단계에서 별도 확인.

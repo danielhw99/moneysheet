@@ -12,7 +12,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record SignupInput(
         @NotBlank @Email @Pattern(regexp = "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$") @Size(max=254) String email,
         @NotBlank @Size(max=50) String nickname,
-        @NotNull @Schema(accessMode=Schema.AccessMode.WRITE_ONLY) String password,
+        @NotNull @Schema(accessMode=Schema.AccessMode.WRITE_ONLY,minLength=15,maxLength=128) String password,
         @NotBlank @Size(max=50) String privacyPolicyVersion,
         @NotNull @AssertTrue Boolean privacyAgreed) {
     public SignupInput {
