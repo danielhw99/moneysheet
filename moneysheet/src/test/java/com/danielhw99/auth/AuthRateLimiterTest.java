@@ -39,4 +39,19 @@ class AuthRateLimiterTest {
   clock.now=clock.now.plusSeconds(3600);
   assertThatCode(()->limiter.request("overflow",true)).doesNotThrowAnyException();
  }
+
+ @Test void fullAccountStorageDoesNotBlockNewIpRequests() {
+  var limiter=new AuthRateLimiter(new MutableClock());
+  for(int i=0;i<10000;i++)limiter.failed("account"+i);
+  assertThatThrownBy(()->limiter.failed("overflow")).isInstanceOf(ApiException.class);
+  assertThatCode(()->limiter.request("new-ip",true)).doesNotThrowAnyException();
+  assertThatCode(()->limiter.request("new-ip",false)).doesNotThrowAnyException();
+ }
+ @Test void fullIpStorageDoesNotBlockAccountOrOtherRequestType() {
+  var limiter=new AuthRateLimiter(new MutableClock());
+  for(int i=0;i<10000;i++)limiter.request("ip"+i,true);
+  assertThatThrownBy(()->limiter.request("new-ip",true)).isInstanceOf(ApiException.class);
+  assertThatCode(()->limiter.failed("new-account")).doesNotThrowAnyException();
+  assertThatCode(()->limiter.request("new-ip",false)).doesNotThrowAnyException();
+ }
 }
