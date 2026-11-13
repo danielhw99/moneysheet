@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record CategoryInput(
-        @NotBlank String name,
+        @NotBlank @Schema(minLength = 1, maxLength = 100) String name,
         @NotNull CategoryScopeValue scope,
         @JsonProperty(required = true) @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED)
         CategoryDirectionValue direction) {

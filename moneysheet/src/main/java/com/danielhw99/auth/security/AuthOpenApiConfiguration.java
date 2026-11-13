@@ -1,6 +1,7 @@
 package com.danielhw99.auth.security;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,8 +21,14 @@ public class AuthOpenApiConfiguration {
             if(openApi.getPaths()==null) return;
             openApi.getPaths().forEach((path,item)->item.readOperationsMap().forEach((method,operation)->{
                 var requirement=new SecurityRequirement();
-                if(path.equals("/api/v1/me") || path.equals("/api/v1/auth/logout")) requirement.addList("sessionCookie");
+                if(path.equals("/api/v1/me") || path.equals("/api/v1/auth/logout")
+                        || path.equals("/api/v1/categories")) requirement.addList("sessionCookie");
                 if(method==io.swagger.v3.oas.models.PathItem.HttpMethod.POST && path.startsWith("/api/v1/auth/")) requirement.addList("csrfToken");
+                if(path.equals("/api/v1/categories") && method==io.swagger.v3.oas.models.PathItem.HttpMethod.POST) {
+                    requirement.addList("csrfToken");
+                    operation.addParametersItem(new Parameter().name("X-CSRF-TOKEN").in("header").required(true)
+                            .schema(new io.swagger.v3.oas.models.media.StringSchema()));
+                }
                 if(!requirement.isEmpty()) operation.addSecurityItem(requirement);
             }));
         };

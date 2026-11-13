@@ -1,5 +1,22 @@
 # MoneySheet Backend App
 
+## Category API (Issue #14, WBS 3.1)
+
+`GET /api/v1/categories` returns the authenticated user's categories as `{ "items": [...] }`.
+Optional `scope` and `direction` filters are supported. `POST /api/v1/categories` creates or
+reuses a category with the same normalized name for that user, scope, and direction. Both new
+and reused results return HTTP 200. `fixedBudget` requires `direction: null`; `mainTransaction`
+requires `income` or `expense`. Both endpoints require a session, POST requires CSRF, and
+responses use `Cache-Control: no-store`.
+
+Verification on 2026-11-13 (Windows): `gradlew.bat test compileIntegrationTestJava bootJar
+--no-daemon --console=plain` passed. The Testcontainers MySQL `integrationTest` task was
+attempted but could not start because no Docker host is available on this machine; therefore
+the concurrency and database-isolation tests are compiled but not yet runtime-verified here.
+Run `gradlew.bat check bootJar --no-daemon --console=plain` on a Docker-enabled host before
+merge. The GET/POST payload and status were checked against the approved OpenAPI category
+schemas; generated `/v3/api-docs` was not runtime-checked without a database.
+
 이 디렉터리는 MoneySheet 백엔드 실제 애플리케이션 루트입니다.
 
 ## Convention Summary

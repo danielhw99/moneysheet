@@ -7,7 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 public record CategoryResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ApiId id,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, minLength = 1, maxLength = 100) String name,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) CategoryScopeValue scope,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED, nullable = true) CategoryDirectionValue direction) {
 

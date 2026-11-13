@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.sql.SQLException;
 
 import com.danielhw99.category.api.CategoryDirectionValue;
 import com.danielhw99.category.api.CategoryInput;
@@ -23,6 +24,7 @@ import com.danielhw99.user.repository.UserRepository;
 import com.danielhw99.common.error.ApiException;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class CategoryServiceTest {
@@ -108,8 +110,54 @@ class CategoryServiceTest {
                 new CategoryInput("\u2003", CategoryScopeValue.FIXED_BUDGET, null)))
                 .isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> service.createOrReuse(7L,
+                new CategoryInput("\u00a0", CategoryScopeValue.FIXED_BUDGET, null)))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> service.createOrReuse(7L,
                 new CategoryInput("\u0130".repeat(51), CategoryScopeValue.FIXED_BUDGET, null)))
                 .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void recoversOnlyNamedDuplicateAfterFailedInsert() {
+        Category existing = category(105L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "Salary");
+        when(users.findById(7L)).thenReturn(Optional.of(existing.getUser()));
+        when(categories.findByUser_IdAndScopeAndDirectionAndNameKey(7L,
+                CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "salary"))
+                .thenReturn(Optional.empty(), Optional.of(existing));
+        when(categories.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate",
+                        new SQLException("Duplicate entry for key 'uq_categories_name'", "23000", 1062)));
+
+        var result = service.createOrReuse(7L,
+                new CategoryInput(" Salary ", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.INCOME));
+
+        assertThat(result.id().jsonValue()).isEqualTo("105");
+        verify(categories, org.mockito.Mockito.times(2)).findByUser_IdAndScopeAndDirectionAndNameKey(
+                7L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "salary");
+    }
+
+    @Test
+    void unrelatedIntegrityErrorIsNotHidden() {
+        Category sample = category(105L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "Salary");
+        when(users.findById(7L)).thenReturn(Optional.of(sample.getUser()));
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("foreign key",
+                new SQLException("Cannot add or update child row", "23000", 1452));
+        when(categories.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class))).thenThrow(failure);
+        assertThatThrownBy(() -> service.createOrReuse(7L,
+                new CategoryInput("Salary", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.INCOME)))
+                .isSameAs(failure);
+    }
+
+    @Test
+    void unrelatedDuplicateKeyIsNotHidden() {
+        Category sample = category(105L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "Salary");
+        when(users.findById(7L)).thenReturn(Optional.of(sample.getUser()));
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("other unique key",
+                new SQLException("Duplicate entry for key 'uq_other'", "23000", 1062));
+        when(categories.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class))).thenThrow(failure);
+        assertThatThrownBy(() -> service.createOrReuse(7L,
+                new CategoryInput("Salary", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.INCOME)))
+                .isSameAs(failure);
     }
 
     private Category category(Long id, CategoryScope scope, CategoryDirection direction, String name) {
