@@ -86,7 +86,7 @@ public class BudgetService {
                     new ApiId(item.getCategory().getId()), item.getAmount()));
         }
         if (firstMonth && draftItems.isEmpty() && budget.getFoodWeekday() == null) {
-            draftItems.add(new DraftItem(null, Kind.FREE_ALLOWANCE, "고정자유비", null, null));
+            draftItems.add(new DraftItem(null, Kind.FREE_ALLOWANCE, "고정여유비", null, null));
         }
         return new Preparation(ApiFormats.formatMonth(month), budget.getSetupStatus() == BudgetSetupStatus.READY ? "ready" : "draft",
                 source, draftItems, new Food(budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday()));
@@ -221,8 +221,7 @@ public class BudgetService {
 
     @Transactional
     public Item updateItem(Long userId, YearMonth month, Long id, ItemInput input) {
-        MonthlyBudget budget = writableReady(userId, month);
-        FixedBudgetItem item = ownedItem(budget, id);
+        FixedBudgetItem item = writableItem(userId, month, id);
         if (input == null) throw new ApiException(ErrorCode.VALIDATION);
         validateItem(input.kind(), input.name(), input.categoryId(), input.amount());
         if (kind(item.getKind()) != input.kind()) throw new ApiException(ErrorCode.VALIDATION);
@@ -234,26 +233,34 @@ public class BudgetService {
 
     @Transactional
     public void deleteItem(Long userId, YearMonth month, Long id) {
-        MonthlyBudget budget = writableReady(userId, month);
-        FixedBudgetItem item = ownedItem(budget, id);
+        FixedBudgetItem item = writableItem(userId, month, id);
         if (payments.existsByFixedBudgetItem_Id(id)) throw new ApiException(ErrorCode.REFERENCED);
         items.delete(item);
     }
 
     private MonthlyBudget writableReady(Long userId, YearMonth month) {
-        calendar.requireWritable(month);
-        users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
-        calendar.requireWritable(month);
+        lockWritableMonth(userId, month);
         MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1))
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
         requireReady(budget);
         return budget;
     }
 
-    private FixedBudgetItem ownedItem(MonthlyBudget budget, Long id) {
+    private void lockWritableMonth(Long userId, YearMonth month) {
+        calendar.requireWritable(month);
+        users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        calendar.requireWritable(month);
+    }
+
+    private FixedBudgetItem writableItem(Long userId, YearMonth month, Long id) {
+        lockWritableMonth(userId, month);
         if (id == null || id < 1) throw new ApiException(ErrorCode.VALIDATION);
-        return items.findById(id).filter(item -> item.getMonthlyBudget().getId().equals(budget.getId()))
+        FixedBudgetItem item = items.findById(id)
+                .filter(candidate -> candidate.getMonthlyBudget().getUser().getId().equals(userId)
+                        && candidate.getMonthlyBudget().getMonthStart().equals(month.atDay(1)))
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+        requireReady(item.getMonthlyBudget());
+        return item;
     }
 
     private Item itemResponse(FixedBudgetItem item) {

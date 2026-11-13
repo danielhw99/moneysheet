@@ -92,6 +92,7 @@ class BudgetIntegrationTest {
         assertThat(first.status()).isEqualTo("draft");
         assertThat(first.items()).singleElement().satisfies(item -> {
             assertThat(item.kind()).isEqualTo(Kind.FREE_ALLOWANCE);
+            assertThat(item.name()).isEqualTo("고정여유비");
             assertThat(item.id()).isNull();
             assertThat(item.amount()).isNull();
         });
@@ -152,6 +153,7 @@ class BudgetIntegrationTest {
         var input = new ItemInput(Kind.FIXED_EXPENSE, "Rent", new ApiId(category.getId()), 100L);
         var created = service.createItem(owner.getId(), month, input);
         assertCode(ErrorCode.NOT_FOUND, () -> service.updateItem(outsider.getId(), month, created.id().value(), input));
+        assertCode(ErrorCode.NOT_FOUND, () -> service.deleteItem(outsider.getId(), month, created.id().value()));
         assertCode(ErrorCode.VALIDATION, () -> service.updateItem(owner.getId(), month, created.id().value(),
                 new ItemInput(Kind.FREE_ALLOWANCE, "Rent", new ApiId(category.getId()), 100L)));
         FixedBudgetItem item = items.findById(created.id().value()).orElseThrow();
@@ -163,6 +165,9 @@ class BudgetIntegrationTest {
         assertThat(service.updateItem(owner.getId(), month, created.id().value(),
                 new ItemInput(Kind.FIXED_EXPENSE, "Rent", new ApiId(category.getId()), 80L)).amount()).isEqualTo(80);
         assertThat(service.updateFood(owner.getId(), month, new Food(1L, 1L, 1L)).food().weekday()).isEqualTo(1);
+        var removable = service.createItem(owner.getId(), month, input);
+        service.deleteItem(owner.getId(), month, removable.id().value());
+        assertCode(ErrorCode.NOT_FOUND, () -> service.deleteItem(owner.getId(), month, removable.id().value()));
     }
 
     @Test void setupValidationRollsBackAndOnlyOneAllowanceCanExist() {

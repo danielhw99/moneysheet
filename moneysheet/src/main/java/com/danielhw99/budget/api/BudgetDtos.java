@@ -4,7 +4,9 @@ import java.util.List;
 
 import com.danielhw99.common.api.ApiId;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonValue;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public final class BudgetDtos {
     private BudgetDtos() {}
@@ -22,7 +24,9 @@ public final class BudgetDtos {
 
     public record Food(Long weekday, Long saturday, Long sunday) {}
     public record ItemInput(Kind kind, String name, ApiId categoryId, Long amount) {}
-    public record SetupItem(ApiId id, Kind kind, String name, ApiId categoryId, Long amount) {}
+    public record SetupItem(
+            @JsonProperty(required = true)
+            @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId id, Kind kind, String name, ApiId categoryId, Long amount) {}
     public record SetupInput(List<SetupItem> items, Food food) {}
     public record Item(ApiId id, Kind kind, String name, ApiId categoryId, long amount) {}
     public record DraftItem(ApiId id, Kind kind, String name, ApiId categoryId, Long amount) {}
