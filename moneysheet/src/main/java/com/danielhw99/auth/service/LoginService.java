@@ -22,14 +22,16 @@ public class LoginService {
                 || input.password().codePointCount(0,input.password().length())>128) {
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
-        limiter.checkAccount(input.email());
-        var user=users.findByEmailKey(input.email());
-        boolean matches=encoder.matches(input.password(),user.map(u->u.getPasswordHash()).orElse(dummyHash));
-        if (!matches || user.isEmpty()) {
-            limiter.failed(input.email());
-            throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
+        try (var attempt = limiter.beginAttempt(input.email())) {
+            var user = users.findByEmailKey(input.email());
+            boolean matches = encoder.matches(input.password(), user.map(u -> u.getPasswordHash()).orElse(dummyHash));
+            if (!matches || user.isEmpty()) {
+                attempt.failed();
+                throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
+            }
+            AuthPrincipal principal = AuthPrincipal.from(user.orElseThrow());
+            attempt.succeeded();
+            return principal;
         }
-        limiter.succeeded(input.email());
-        return AuthPrincipal.from(user.orElseThrow());
     }
 }

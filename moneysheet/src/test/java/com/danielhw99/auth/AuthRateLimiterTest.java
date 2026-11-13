@@ -13,11 +13,20 @@ class AuthRateLimiterTest {
   Instant now=Instant.parse("2026-11-13T00:00:00Z");
   public Instant instant(){return now;}public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId z){return this;}
  }
+ private static void fail(AuthRateLimiter limiter,String email) {
+  try(var attempt=limiter.beginAttempt(email)){attempt.failed();}
+ }
+ private static void check(AuthRateLimiter limiter,String email) {
+  try(var attempt=limiter.beginAttempt(email)){ }
+ }
+ private static void succeed(AuthRateLimiter limiter,String email) {
+  try(var attempt=limiter.beginAttempt(email)){attempt.succeeded();}
+ }
  @Test void accountBlocksAfterFiveFailuresAndReopensAfterFifteenMinutes() {
   var clock=new MutableClock();var limiter=new AuthRateLimiter(clock);
-  for(int i=0;i<5;i++){limiter.checkAccount("a");limiter.failed("a");}
-  assertThatThrownBy(()->limiter.checkAccount("a")).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.getRetryAfterSeconds()).isEqualTo(900));
-  clock.now=clock.now.plusSeconds(900);assertThatCode(()->limiter.checkAccount("a")).doesNotThrowAnyException();
+  for(int i=0;i<5;i++){check(limiter,"a");fail(limiter,"a");}
+  assertThatThrownBy(()->check(limiter,"a")).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.getRetryAfterSeconds()).isEqualTo(900));
+  clock.now=clock.now.plusSeconds(900);assertThatCode(()->check(limiter,"a")).doesNotThrowAnyException();
  }
  @Test void ipLimitsAreSeparateAndSuccessfulLoginClearsFailures() {
   var clock=new MutableClock();var limiter=new AuthRateLimiter(clock);
@@ -26,8 +35,8 @@ class AuthRateLimiterTest {
   assertThatCode(()->limiter.request("other",false)).doesNotThrowAnyException();
   for(int i=0;i<10;i++)limiter.request("ip",true);
   assertThatThrownBy(()->limiter.request("ip",true)).isInstanceOf(ApiException.class);
-  for(int i=0;i<4;i++)limiter.failed("a");limiter.succeeded("a");limiter.failed("a");
-  assertThatCode(()->limiter.checkAccount("a")).doesNotThrowAnyException();
+  for(int i=0;i<4;i++)fail(limiter,"a");succeed(limiter,"a");fail(limiter,"a");
+  assertThatCode(()->check(limiter,"a")).doesNotThrowAnyException();
   clock.now=clock.now.plusSeconds(60);assertThatCode(()->limiter.request("ip",false)).doesNotThrowAnyException();
  }
 
@@ -42,8 +51,8 @@ class AuthRateLimiterTest {
 
  @Test void fullAccountStorageDoesNotBlockNewIpRequests() {
   var limiter=new AuthRateLimiter(new MutableClock());
-  for(int i=0;i<10000;i++)limiter.failed("account"+i);
-  assertThatThrownBy(()->limiter.failed("overflow")).isInstanceOf(ApiException.class);
+  for(int i=0;i<10000;i++)fail(limiter,"account"+i);
+  assertThatThrownBy(()->fail(limiter,"overflow")).isInstanceOf(ApiException.class);
   assertThatCode(()->limiter.request("new-ip",true)).doesNotThrowAnyException();
   assertThatCode(()->limiter.request("new-ip",false)).doesNotThrowAnyException();
  }
@@ -51,7 +60,31 @@ class AuthRateLimiterTest {
   var limiter=new AuthRateLimiter(new MutableClock());
   for(int i=0;i<10000;i++)limiter.request("ip"+i,true);
   assertThatThrownBy(()->limiter.request("new-ip",true)).isInstanceOf(ApiException.class);
-  assertThatCode(()->limiter.failed("new-account")).doesNotThrowAnyException();
+  assertThatCode(()->fail(limiter,"new-account")).doesNotThrowAnyException();
   assertThatCode(()->limiter.request("new-ip",false)).doesNotThrowAnyException();
+ }
+
+ @Test void reservationsSurviveTtlUntilClosedAndCloseIsIdempotent() {
+  var clock=new MutableClock();var limiter=new AuthRateLimiter(clock);
+  var attempts=new java.util.ArrayList<AuthRateLimiter.Attempt>();
+  for(int i=0;i<5;i++)attempts.add(limiter.beginAttempt("same"));
+  clock.now=clock.now.plusSeconds(901);
+  assertThatThrownBy(()->limiter.beginAttempt("same")).isInstanceOf(ApiException.class);
+  for(var attempt:attempts){attempt.close();attempt.close();}
+  assertThatCode(()->check(limiter,"same")).doesNotThrowAnyException();
+ }
+ @Test void successClearsFailuresButRetainsOtherInFlightReservations() {
+  var limiter=new AuthRateLimiter(new MutableClock());
+  var attempts=new java.util.ArrayList<AuthRateLimiter.Attempt>();
+  for(int i=0;i<5;i++)attempts.add(limiter.beginAttempt("same"));
+  attempts.getFirst().succeeded();
+  try(var replacement=limiter.beginAttempt("same")) {
+   assertThatThrownBy(()->limiter.beginAttempt("same")).isInstanceOf(ApiException.class);
+  }
+  for(var attempt:attempts)attempt.close();
+  for(int i=0;i<4;i++)fail(limiter,"same");
+  succeed(limiter,"same");
+  for(int i=0;i<5;i++)fail(limiter,"same");
+  assertThatThrownBy(()->check(limiter,"same")).isInstanceOf(ApiException.class);
  }
 }
