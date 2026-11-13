@@ -2,13 +2,13 @@ package com.danielhw99.category;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -17,8 +17,6 @@ import java.util.Optional;
 import com.danielhw99.category.api.CategoryDirectionValue;
 import com.danielhw99.category.api.CategoryInput;
 import com.danielhw99.category.api.CategoryScopeValue;
-import com.danielhw99.category.entity.CategoryDirection;
-import com.danielhw99.category.entity.CategoryScope;
 import com.danielhw99.category.repository.CategoryRepository;
 import com.danielhw99.category.service.CategoryService;
 import com.danielhw99.user.entity.User;
@@ -101,12 +99,18 @@ class CategoryIntegrationTest {
         Long userId = user("category-stale@example.com");
         var input = new CategoryInput("Rent", CategoryScopeValue.FIXED_BUDGET, null);
         var first = service.createOrReuse(userId, input);
-        CategoryRepository staleLookup = spy(categories);
-        doReturn(Optional.empty()).doAnswer(invocation -> categories.findByUser_IdAndScopeAndDirectionAndNameKey(
-                invocation.getArgument(0), invocation.getArgument(1),
-                invocation.getArgument(2), invocation.getArgument(3)))
-                .when(staleLookup).findByUser_IdAndScopeAndDirectionAndNameKey(
-                        userId, CategoryScope.FIXED_BUDGET, CategoryDirection.NONE, "rent");
+        AtomicBoolean firstLookup = new AtomicBoolean(true);
+        CategoryRepository staleLookup = (CategoryRepository) Proxy.newProxyInstance(
+                CategoryRepository.class.getClassLoader(), new Class<?>[] {CategoryRepository.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("findByUser_IdAndScopeAndDirectionAndNameKey")
+                            && firstLookup.getAndSet(false)) return Optional.empty();
+                    try {
+                        return method.invoke(categories, args);
+                    } catch (InvocationTargetException failure) {
+                        throw failure.getCause();
+                    }
+                });
 
         var recovered = new CategoryService(staleLookup, users).createOrReuse(userId, input);
 
