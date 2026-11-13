@@ -61,6 +61,7 @@ public class BudgetService {
     public Preparation prepare(Long userId, YearMonth month) {
         calendar.requireWritable(month);
         var owner = users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        calendar.requireWritable(month);
         var existing = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1));
         var previous = budgets.findByUser_IdAndMonthStart(userId, month.minusMonths(1).atDay(1));
         if (existing.isPresent()) return preparation(existing.get(), month, null, previous.isEmpty());
@@ -107,6 +108,7 @@ public class BudgetService {
     public Summary setup(Long userId, YearMonth month, SetupInput input) {
         calendar.requireWritable(month);
         users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        calendar.requireWritable(month);
         MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1))
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
         if (budget.getSetupStatus() != BudgetSetupStatus.DRAFT) throw new ApiException(ErrorCode.CONFLICT);
@@ -241,6 +243,7 @@ public class BudgetService {
     private MonthlyBudget writableReady(Long userId, YearMonth month) {
         calendar.requireWritable(month);
         users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        calendar.requireWritable(month);
         MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1))
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
         requireReady(budget);

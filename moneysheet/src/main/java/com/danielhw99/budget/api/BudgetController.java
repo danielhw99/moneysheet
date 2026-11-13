@@ -5,6 +5,9 @@ import java.time.YearMonth;
 import com.danielhw99.auth.security.AuthPrincipal;
 import com.danielhw99.budget.service.BudgetService;
 import com.danielhw99.common.api.ApiFormats;
+import com.danielhw99.common.api.ApiId;
+import com.danielhw99.common.error.ApiException;
+import com.danielhw99.common.error.ErrorCode;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,7 +29,7 @@ public class BudgetController {
     @PostMapping("/budget-preparation")
     public ResponseEntity<BudgetDtos.Preparation> prepare(@AuthenticationPrincipal AuthPrincipal principal,
                                                             @PathVariable String month) {
-        YearMonth parsed = ApiFormats.parseMonth(month);
+        YearMonth parsed = parseMonth(month);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.prepare(principal.userId(), parsed));
     }
 
@@ -34,7 +37,7 @@ public class BudgetController {
     public ResponseEntity<BudgetDtos.Summary> get(@AuthenticationPrincipal AuthPrincipal principal,
                                                    @PathVariable String month) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(service.get(principal.userId(), ApiFormats.parseMonth(month)));
+                .body(service.get(principal.userId(), parseMonth(month)));
     }
 
     @PutMapping("/budget-setup")
@@ -42,7 +45,7 @@ public class BudgetController {
                                                      @PathVariable String month,
                                                      @RequestBody BudgetDtos.SetupInput input) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(service.setup(principal.userId(), ApiFormats.parseMonth(month), input));
+                .body(service.setup(principal.userId(), parseMonth(month), input));
     }
 
     @PutMapping("/food-budget")
@@ -50,7 +53,7 @@ public class BudgetController {
                                                           @PathVariable String month,
                                                           @RequestBody BudgetDtos.Food input) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(service.updateFood(principal.userId(), ApiFormats.parseMonth(month), input));
+                .body(service.updateFood(principal.userId(), parseMonth(month), input));
     }
 
     @PostMapping("/budget-items")
@@ -58,7 +61,7 @@ public class BudgetController {
                                                        @PathVariable String month,
                                                        @RequestBody BudgetDtos.ItemInput input) {
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore())
-                .body(service.createItem(principal.userId(), ApiFormats.parseMonth(month), input));
+                .body(service.createItem(principal.userId(), parseMonth(month), input));
     }
 
     @PutMapping("/budget-items/{id}")
@@ -66,15 +69,25 @@ public class BudgetController {
                                                        @PathVariable String month, @PathVariable String id,
                                                        @RequestBody BudgetDtos.ItemInput input) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(service.updateItem(principal.userId(), ApiFormats.parseMonth(month),
-                        com.danielhw99.common.api.ApiId.parse(id).value(), input));
+                .body(service.updateItem(principal.userId(), parseMonth(month), parseItemId(id), input));
     }
 
     @DeleteMapping("/budget-items/{id}")
     public ResponseEntity<Void> deleteItem(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable String month, @PathVariable String id) {
-        service.deleteItem(principal.userId(), ApiFormats.parseMonth(month),
-                com.danielhw99.common.api.ApiId.parse(id).value());
+        service.deleteItem(principal.userId(), parseMonth(month), parseItemId(id));
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    private YearMonth parseMonth(String value) {
+        try { return ApiFormats.parseMonth(value); }
+        catch (java.time.DateTimeException | IllegalArgumentException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION);
+        }
+    }
+
+    private long parseItemId(String value) {
+        try { return ApiId.parse(value).value(); }
+        catch (IllegalArgumentException invalid) { throw new ApiException(ErrorCode.VALIDATION); }
     }
 }
