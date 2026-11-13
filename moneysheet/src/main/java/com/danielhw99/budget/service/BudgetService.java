@@ -3,12 +3,20 @@ package com.danielhw99.budget.service;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.danielhw99.budget.api.BudgetDtos;
 import com.danielhw99.budget.api.BudgetDtos.DraftItem;
 import com.danielhw99.budget.api.BudgetDtos.Food;
 import com.danielhw99.budget.api.BudgetDtos.Kind;
 import com.danielhw99.budget.api.BudgetDtos.Preparation;
+import com.danielhw99.budget.api.BudgetDtos.SetupInput;
+import com.danielhw99.budget.api.BudgetDtos.Summary;
+import com.danielhw99.budget.api.BudgetDtos.ItemSummary;
+import com.danielhw99.budget.api.BudgetDtos.FoodSummary;
 import com.danielhw99.budget.entity.BudgetSetupStatus;
 import com.danielhw99.budget.entity.FixedBudgetItem;
 import com.danielhw99.budget.entity.FixedBudgetKind;
@@ -16,6 +24,8 @@ import com.danielhw99.budget.entity.MonthlyBudget;
 import com.danielhw99.budget.repository.FixedBudgetItemRepository;
 import com.danielhw99.budget.repository.MonthlyBudgetRepository;
 import com.danielhw99.category.repository.CategoryRepository;
+import com.danielhw99.category.entity.Category;
+import com.danielhw99.category.entity.CategoryScope;
 import com.danielhw99.common.api.ApiId;
 import com.danielhw99.common.api.ApiFormats;
 import com.danielhw99.common.error.ApiException;
@@ -81,5 +91,105 @@ public class BudgetService {
 
     private Kind kind(FixedBudgetKind value) {
         return value == FixedBudgetKind.FREE_ALLOWANCE ? Kind.FREE_ALLOWANCE : Kind.FIXED_EXPENSE;
+    }
+
+    @Transactional(readOnly = true)
+    public Summary get(Long userId, YearMonth month) {
+        MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1))
+                .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
+        requireReady(budget);
+        return summary(budget, month);
+    }
+
+    @Transactional
+    public Summary setup(Long userId, YearMonth month, SetupInput input) {
+        calendar.requireWritable(month);
+        users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1))
+                .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
+        if (budget.getSetupStatus() != BudgetSetupStatus.DRAFT) throw new ApiException(ErrorCode.CONFLICT);
+        if (input == null || input.items() == null) throw new ApiException(ErrorCode.VALIDATION);
+        validateFood(input.food());
+        Map<Long, FixedBudgetItem> existing = items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())
+                .stream().collect(Collectors.toMap(FixedBudgetItem::getId, Function.identity()));
+        var seenIds = new HashSet<Long>();
+        int allowanceCount = 0;
+        for (var item : input.items()) {
+            if (item == null) throw new ApiException(ErrorCode.VALIDATION);
+            validateItem(item.kind(), item.name(), item.categoryId(), item.amount());
+            if (item.kind() == Kind.FREE_ALLOWANCE) allowanceCount++;
+            if (allowanceCount > 1) throw new ApiException(ErrorCode.VALIDATION);
+            if (item.id() != null && !seenIds.add(item.id().value())) throw new ApiException(ErrorCode.VALIDATION);
+            if (item.id() != null) {
+                FixedBudgetItem current = existing.get(item.id().value());
+                if (current == null) throw new ApiException(ErrorCode.NOT_FOUND);
+                if (kind(current.getKind()) != item.kind()) throw new ApiException(ErrorCode.VALIDATION);
+            }
+        }
+        for (var current : existing.values()) {
+            if (!seenIds.contains(current.getId())) {
+                if (payments.existsByFixedBudgetItem_Id(current.getId())) throw new ApiException(ErrorCode.REFERENCED);
+                items.delete(current);
+            }
+        }
+        items.flush(); // Release the one-allowance unique slot before a replacement insert.
+        for (var item : input.items()) {
+            Category category = fixedCategory(userId, item.categoryId());
+            if (item.id() == null) {
+                items.save(new FixedBudgetItem(budget, category, entityKind(item.kind()),
+                        item.name().strip(), item.amount()));
+            } else {
+                existing.get(item.id().value()).update(category, item.name().strip(), item.amount());
+            }
+        }
+        budget.finishSetup(input.food().weekday(), input.food().saturday(), input.food().sunday());
+        items.flush();
+        return summary(budget, month);
+    }
+
+    private Summary summary(MonthlyBudget budget, YearMonth month) {
+        var result = new ArrayList<ItemSummary>();
+        long fixedTotal = 0;
+        for (var item : items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())) {
+            boolean automatic = item.getKind() == FixedBudgetKind.FREE_ALLOWANCE;
+            long paid = automatic ? item.getAmount() : payments.sumAmountByItemId(item.getId());
+            if (paid > item.getAmount()) throw new ApiException(ErrorCode.AMOUNT_RANGE_EXCEEDED);
+            fixedTotal = calendar.safeAdd(fixedTotal, item.getAmount());
+            result.add(new ItemSummary(new ApiId(item.getId()), kind(item.getKind()), item.getName(),
+                    new ApiId(item.getCategory().getId()), item.getAmount(), paid,
+                    item.getAmount() - paid, paid == item.getAmount(), automatic));
+        }
+        Food food = new Food(budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday());
+        var installments = calendar.foodInstallments(month, food.weekday(), food.saturday(), food.sunday());
+        long total = calendar.safeAdd(calendar.safeAdd(installments.get(0), installments.get(1)), installments.get(2));
+        return new Summary(ApiFormats.formatMonth(month), "ready", result, food,
+                fixedTotal, new FoodSummary(total, installments));
+    }
+
+    private void requireReady(MonthlyBudget budget) {
+        if (budget.getSetupStatus() != BudgetSetupStatus.READY) throw new ApiException(ErrorCode.BUDGET_NOT_READY);
+    }
+
+    private void validateFood(Food food) {
+        if (food == null || !validAmount(food.weekday()) || !validAmount(food.saturday()) || !validAmount(food.sunday()))
+            throw new ApiException(ErrorCode.VALIDATION);
+    }
+
+    private void validateItem(Kind kind, String name, ApiId categoryId, Long amount) {
+        if (kind == null || categoryId == null || !validAmount(amount) || name == null
+                || name.strip().isEmpty() || name.strip().codePointCount(0, name.strip().length()) > 100)
+            throw new ApiException(ErrorCode.VALIDATION);
+    }
+
+    private boolean validAmount(Long amount) { return amount != null && amount >= 1 && amount <= 9_999_999_999L; }
+
+    private Category fixedCategory(Long userId, ApiId categoryId) {
+        return categories.findById(categoryId.value())
+                .filter(c -> c.getUser().getId().equals(userId) && c.getScope() == CategoryScope.FIXED_BUDGET)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+    }
+
+    private FixedBudgetKind entityKind(Kind kind) {
+        return kind == Kind.FREE_ALLOWANCE ? FixedBudgetKind.FREE_ALLOWANCE : FixedBudgetKind.FIXED_EXPENSE;
     }
 }
