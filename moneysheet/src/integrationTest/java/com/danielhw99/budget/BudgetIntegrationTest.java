@@ -133,6 +133,15 @@ class BudgetIntegrationTest {
         assertCode(ErrorCode.FUTURE_MONTH_NOT_ALLOWED, () -> service.prepare(owner.getId(), month.plusMonths(1)));
     }
 
+    @Test void emptyPreviousMonthDoesNotBecomeFirstMonthPlaceholderOnRetry() {
+        User owner = user();
+        YearMonth month = month();
+        budgets.saveAndFlush(new MonthlyBudget(owner, month.minusMonths(1).atDay(1),
+                BudgetSetupStatus.DRAFT, null, null, null));
+        assertThat(service.prepare(owner.getId(), month).items()).isEmpty();
+        assertThat(service.prepare(owner.getId(), month).items()).isEmpty();
+    }
+
     @Test void readyCrudGuardsPaymentsOwnershipAndKind() {
         User owner = user();
         User outsider = user();

@@ -62,9 +62,8 @@ public class BudgetService {
         calendar.requireWritable(month);
         var owner = users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
         var existing = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1));
-        if (existing.isPresent()) return preparation(existing.get(), month, null);
-
         var previous = budgets.findByUser_IdAndMonthStart(userId, month.minusMonths(1).atDay(1));
+        if (existing.isPresent()) return preparation(existing.get(), month, null, previous.isEmpty());
         var budget = budgets.saveAndFlush(new MonthlyBudget(owner, month.atDay(1), BudgetSetupStatus.DRAFT,
                 previous.map(MonthlyBudget::getFoodWeekday).orElse(null),
                 previous.map(MonthlyBudget::getFoodSaturday).orElse(null),
@@ -75,16 +74,17 @@ public class BudgetService {
             }
             items.flush();
         }
-        return preparation(budget, month, previous.isPresent() ? ApiFormats.formatMonth(month.minusMonths(1)) : null);
+        return preparation(budget, month, previous.isPresent() ? ApiFormats.formatMonth(month.minusMonths(1)) : null,
+                previous.isEmpty());
     }
 
-    private Preparation preparation(MonthlyBudget budget, YearMonth month, String source) {
+    private Preparation preparation(MonthlyBudget budget, YearMonth month, String source, boolean firstMonth) {
         List<DraftItem> draftItems = new ArrayList<>();
         for (var item : items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())) {
             draftItems.add(new DraftItem(new ApiId(item.getId()), kind(item.getKind()), item.getName(),
                     new ApiId(item.getCategory().getId()), item.getAmount()));
         }
-        if (source == null && draftItems.isEmpty() && budget.getFoodWeekday() == null) {
+        if (firstMonth && draftItems.isEmpty() && budget.getFoodWeekday() == null) {
             draftItems.add(new DraftItem(null, Kind.FREE_ALLOWANCE, "고정자유비", null, null));
         }
         return new Preparation(ApiFormats.formatMonth(month), budget.getSetupStatus() == BudgetSetupStatus.READY ? "ready" : "draft",
