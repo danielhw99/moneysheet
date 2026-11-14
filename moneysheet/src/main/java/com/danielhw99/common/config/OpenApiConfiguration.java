@@ -76,6 +76,12 @@ public class OpenApiConfiguration {
     }
 
     @Bean
+    public GroupedOpenApi cashFlowDocumentation() {
+        return GroupedOpenApi.builder().group("cash-flows").pathsToMatch(
+                "/api/v1/months/*/cash-flows", "/api/v1/months/*/cash-flows/**").build();
+    }
+
+    @Bean
     public PropertyCustomizer temporalApiSchemas() {
         return (schema, type) -> {
             if (type.getType() == null) {

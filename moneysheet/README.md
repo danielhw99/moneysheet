@@ -353,3 +353,15 @@ local Swagger UI:
 - expenseTotal/total은 필터 전체 지급액의 양수 합계, incomeTotal은0. 페이지 cursor/limit와 무관하며 JS 안전 정수 범위를 검사합니다.
 - Swagger UI의 payments 그룹에서 확인합니다. 실행 중인 이전 BE는 새 빌드로 재시작해야 그룹이 표시됩니다.
 - Main/여유비 계산, 일반 입금 자동 생성, 실제 은행 이체, FE 연결은 후속입니다. 실제 개발 DB·비밀 파일·기존 실행 서버를 변경하지 않습니다.
+
+### Monthly 수익·그 외 지출 API (#19)
+
+- `/api/v1/months/{month}/cash-flows`: POST 생성201, GET 목록200. `/{id}` GET·PUT200, DELETE204.
+- `kind`는 `income`(Monthly 수익), `extraExpense`(기본예산 외 저축계좌 출금)입니다. 금액은 부호 없는 양수1..9,999,999,999원입니다.
+- READY 월만 기록/조회합니다. 과거 READY 월의 실제 기록도 수정/삭제 가능하며, PUT은 소속 월과 종류를 유지합니다. 종류 변경 요청은 VALIDATION으로 거부합니다.
+- 목록은 선택적 `date`와 `kind`의 교집합입니다. 생략하면 해당 월 전체, 정렬은 날짜·시각·ID 내림차순, limit 기본50/최대100입니다.
+- `expenseTotal`/`incomeTotal`은 페이지가 아닌 전체 필터의 종류별 양수 합계, `total=incomeTotal-expenseTotal`입니다. 모든 합계는 JavaScript 안전 정수 범위를 검증합니다.
+- cash-flow 전용 서명 커서는 사용자·월·날짜·kind에 결합됩니다. 서버 재시작 후에는 첫 페이지부터 재조회하며, 페이지 사이 수정 snapshot은 보장하지 않습니다.
+- Monthly 수익/지출은 Main 거래·메모·고정비 지급을 자동 생성하거나 변경하지 않습니다. 기본예산 전달을 그 외 지출로 자동 중복 기록하지 않습니다.
+- 이 API의 total은 수익−그 외 지출입니다. 고정비/식비 예산까지 차감한 Monthly 순증감 조회는 #20 후속이며 전체 통장 잔액을 뜻하지 않습니다.
+- local Swagger UI에서 `cash-flows` 그룹으로 조회합니다. 실제 개발 DB·비밀 파일·기존 실행 서버·FE·Flyway SQL 변경은 없습니다.
