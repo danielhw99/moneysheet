@@ -70,6 +70,12 @@ public class OpenApiConfiguration {
     }
 
     @Bean
+    public GroupedOpenApi paymentDocumentation() {
+        return GroupedOpenApi.builder().group("payments").pathsToMatch(
+                "/api/v1/months/*/fixed-payments", "/api/v1/months/*/fixed-payments/**").build();
+    }
+
+    @Bean
     public PropertyCustomizer temporalApiSchemas() {
         return (schema, type) -> {
             if (type.getType() == null) {
