@@ -19,6 +19,7 @@ import com.danielhw99.auth.security.SessionExpiryFilter;
 import com.danielhw99.common.api.ApiId;
 import com.danielhw99.payment.api.PaymentController;
 import com.danielhw99.payment.api.PaymentResponse;
+import com.danielhw99.payment.api.PaymentList;
 import com.danielhw99.payment.service.PaymentService;
 import com.danielhw99.common.config.ApiJsonConfiguration;
 import com.danielhw99.common.web.TraceIdFilter;
@@ -45,6 +46,8 @@ class PaymentMvcTest {
     PaymentService service;
     @MockitoBean
     AuthRateLimiter limiter;
+    @MockitoBean
+    com.danielhw99.payment.service.PaymentReadService reads;
 
     private final String path = "/api/v1/months/2026-11/fixed-payments";
     private final String valid = "{\"date\":\"2026-11-01\",\"time\":\"12:30\",\"title\":\"점심\",\"amount\":9000,\"budgetItemId\":\"51\"}";
@@ -73,6 +76,15 @@ class PaymentMvcTest {
         mvc.perform(post(path).session(session(7L)).contentType(MediaType.APPLICATION_JSON).content(valid)).andExpect(status().isForbidden());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(path+"/1").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isNoContent()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+    }
+    @Test void listBindsOptionalDateAndItemAndPreservesPositiveTotal() throws Exception {
+        when(reads.list(7L,java.time.YearMonth.of(2026,11),java.time.LocalDate.of(2026,11,1),51L,null,1))
+                .thenReturn(new PaymentList(List.of(),null,9000,0,9000));
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-01").param("budgetItemId","51").param("limit","1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(9000)).andExpect(jsonPath("$.incomeTotal").value(0));
+        mvc.perform(get(path).session(session(7L)).param("budgetItemId","bad")).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-31")).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("limit","101")).andExpect(status().isBadRequest());
     }
     private MockHttpSession session(Long userId) {
         var principal = new AuthPrincipal(userId, "user@example.com", "User");

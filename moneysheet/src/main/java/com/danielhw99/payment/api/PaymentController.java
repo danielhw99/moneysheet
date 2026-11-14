@@ -1,6 +1,7 @@
 package com.danielhw99.payment.api;
 
 import java.time.YearMonth;
+import com.danielhw99.payment.service.PaymentReadService;
 import java.time.LocalDate;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.danielhw99.auth.security.AuthPrincipal;
@@ -29,7 +30,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/months/{month}/fixed-payments")
 public class PaymentController {
     private final PaymentService service;
-    public PaymentController(PaymentService service) { this.service = service; }
+    private final PaymentReadService reads;
+    public PaymentController(PaymentService service, PaymentReadService reads) { this.service = service; this.reads = reads; }
+    @GetMapping
+    public ResponseEntity<PaymentList> list(@AuthenticationPrincipal AuthPrincipal user,
+            @Parameter(schema=@Schema(type="string",pattern="^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month,
+            @RequestParam(required=false) LocalDate date,
+            @RequestParam(required=false) ApiId budgetItemId,
+            @RequestParam(required=false) String cursor,
+            @RequestParam(defaultValue="50") @Min(1) @Max(100) int limit) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(reads.list(user.userId(), month, date,
+                budgetItemId == null ? null : budgetItemId.value(), cursor, limit));
+    }
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<PaymentResponse> create(@AuthenticationPrincipal AuthPrincipal user,
