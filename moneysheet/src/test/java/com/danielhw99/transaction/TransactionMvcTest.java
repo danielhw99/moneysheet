@@ -45,6 +45,8 @@ class TransactionMvcTest {
     @MockitoBean
     TransactionService service;
     @MockitoBean
+    com.danielhw99.transaction.service.TransactionReadService reads;
+    @MockitoBean
     AuthRateLimiter limiter;
 
     private final String path = "/api/v1/months/2026-11/transactions";
@@ -74,6 +76,15 @@ class TransactionMvcTest {
         mvc.perform(post(path).session(session(7L)).contentType(MediaType.APPLICATION_JSON).content(valid)).andExpect(status().isForbidden());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(path+"/1").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isNoContent()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+    }
+    @Test void listBindsDateDirectionAndLimitStrictly() throws Exception {
+        when(reads.list(7L,java.time.YearMonth.of(2026,11),java.time.LocalDate.of(2026,11,1),TransactionDirectionValue.INCOME,null,1))
+                .thenReturn(new com.danielhw99.transaction.api.TransactionList(List.of(),null,0,20000,20000));
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-01").param("direction","income").param("limit","1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.rows").isEmpty()).andExpect(jsonPath("$.incomeTotal").value(20000));
+        mvc.perform(get(path).session(session(7L)).param("direction","INCOME")).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-31")).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("limit","101")).andExpect(status().isBadRequest());
     }
     private MockHttpSession session(Long userId) {
         var principal = new AuthPrincipal(userId, "user@example.com", "User");

@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -48,7 +49,7 @@ public class AuthController {
 
     @GetMapping("/csrf")
     @Operation(summary="CSRF 토큰 취득", description="가입 및 로그인 전 취득하고 로그인·로그아웃 후 다시 취득합니다.")
-    public CsrfResponse csrf(CsrfToken token) { return new CsrfResponse(token.getToken(), token.getHeaderName()); }
+    public CsrfResponse csrf(@Parameter(hidden = true) CsrfToken token) { return new CsrfResponse(token.getToken(), token.getHeaderName()); }
 
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)

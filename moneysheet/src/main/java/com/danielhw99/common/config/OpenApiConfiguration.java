@@ -91,9 +91,20 @@ public class OpenApiConfiguration {
     @Bean
     public GlobalOpenApiCustomizer closedDtoSchemas() {
         return openApi -> {
-            if (openApi.getComponents() == null || openApi.getComponents().getSchemas() == null) {
-                return;
-            }
+            if (openApi.getComponents() == null) openApi.setComponents(new Components());
+            ResolvedSchema error = ModelConverters.getInstance().resolveAsResolvedSchema(new AnnotatedType(ApiError.class));
+            if (error.referencedSchemas != null) error.referencedSchemas.forEach(openApi.getComponents()::addSchemas);
+            openApi.getComponents().addSchemas("ApiError", error.schema);
+            if (openApi.getPaths() != null) openApi.getPaths().values().forEach(path -> path.readOperations().forEach(operation -> {
+                if (operation.getResponses() == null) operation.setResponses(new io.swagger.v3.oas.models.responses.ApiResponses());
+                for (String status : java.util.List.of("400", "401", "403", "404", "409", "429", "500")) {
+                    if (!operation.getResponses().containsKey(status)) operation.getResponses().addApiResponse(status,
+                            new io.swagger.v3.oas.models.responses.ApiResponse().description("공통 ApiError 응답")
+                                    .content(new io.swagger.v3.oas.models.media.Content().addMediaType("application/json",
+                                            new io.swagger.v3.oas.models.media.MediaType().schema(
+                                                    new io.swagger.v3.oas.models.media.Schema<>().$ref("#/components/schemas/ApiError")))));
+                }
+            }));
             openApi.getComponents().getSchemas().values().forEach(schema -> {
                 if (schema.getProperties() != null && !schema.getProperties().isEmpty()
                         && schema.getAdditionalProperties() == null) {

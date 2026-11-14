@@ -29,7 +29,6 @@ springdoc:
     enabled: false
     disable-swagger-default-url: true
     persist-authorization: false
-  paths-to-match: /api/v1/**
   override-with-generic-response: false
 
 server:
