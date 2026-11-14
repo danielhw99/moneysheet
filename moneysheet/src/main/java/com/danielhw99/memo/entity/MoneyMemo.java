@@ -93,4 +93,11 @@ public class MoneyMemo extends BaseEntity {
     public LocalDate getCompletedOn() {
         return completedOn;
     }
+    public void update(LocalDate date, LocalTime time, String title, Long amount, MemoDirection direction) {
+        this.occurredOn = date;
+        this.occurredTime = time;
+        this.title = title;
+        this.amount = amount;
+        this.direction = direction;
+    }
 }
