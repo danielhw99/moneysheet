@@ -16,7 +16,8 @@ import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 
-import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springdoc.core.customizers.GlobalOpenApiCustomizer;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springdoc.core.customizers.PropertyCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,6 +38,29 @@ public class OpenApiConfiguration {
                         + "성공은 DTO 직접 반환, 오류는 code/message/fieldErrors/traceId 형식입니다. "
                         + "삭제 성공 204는 본문이 없습니다. 설계 기준 계약은 v0.1.1입니다."))
                 .components(components);
+    }
+
+    @Bean
+    public GroupedOpenApi authDocumentation() {
+        return GroupedOpenApi.builder().group("auth").pathsToMatch("/api/v1/auth/**", "/api/v1/me").build();
+    }
+
+    @Bean
+    public GroupedOpenApi categoryDocumentation() {
+        return GroupedOpenApi.builder().group("categories").pathsToMatch("/api/v1/categories").build();
+    }
+
+    @Bean
+    public GroupedOpenApi budgetDocumentation() {
+        return GroupedOpenApi.builder().group("budgets").pathsToMatch(
+                "/api/v1/months/*/budget", "/api/v1/months/*/budget-preparation",
+                "/api/v1/months/*/budget-setup", "/api/v1/months/*/food-budget",
+                "/api/v1/months/*/budget-items", "/api/v1/months/*/budget-items/**").build();
+    }
+
+    @Bean
+    public GroupedOpenApi transactionDocumentation() {
+        return GroupedOpenApi.builder().group("transactions").pathsToMatch("/api/v1/months/*/transactions", "/api/v1/months/*/transactions/**").build();
     }
 
     @Bean
@@ -65,11 +89,22 @@ public class OpenApiConfiguration {
     }
 
     @Bean
-    public OpenApiCustomizer closedDtoSchemas() {
+    public GlobalOpenApiCustomizer closedDtoSchemas() {
         return openApi -> {
-            if (openApi.getComponents() == null || openApi.getComponents().getSchemas() == null) {
-                return;
-            }
+            if (openApi.getComponents() == null) openApi.setComponents(new Components());
+            ResolvedSchema error = ModelConverters.getInstance().resolveAsResolvedSchema(new AnnotatedType(ApiError.class));
+            if (error.referencedSchemas != null) error.referencedSchemas.forEach(openApi.getComponents()::addSchemas);
+            openApi.getComponents().addSchemas("ApiError", error.schema);
+            if (openApi.getPaths() != null) openApi.getPaths().values().forEach(path -> path.readOperations().forEach(operation -> {
+                if (operation.getResponses() == null) operation.setResponses(new io.swagger.v3.oas.models.responses.ApiResponses());
+                for (String status : java.util.List.of("400", "401", "403", "404", "409", "429", "500")) {
+                    if (!operation.getResponses().containsKey(status)) operation.getResponses().addApiResponse(status,
+                            new io.swagger.v3.oas.models.responses.ApiResponse().description("공통 ApiError 응답")
+                                    .content(new io.swagger.v3.oas.models.media.Content().addMediaType("application/json",
+                                            new io.swagger.v3.oas.models.media.MediaType().schema(
+                                                    new io.swagger.v3.oas.models.media.Schema<>().$ref("#/components/schemas/ApiError")))));
+                }
+            }));
             openApi.getComponents().getSchemas().values().forEach(schema -> {
                 if (schema.getProperties() != null && !schema.getProperties().isEmpty()
                         && schema.getAdditionalProperties() == null) {

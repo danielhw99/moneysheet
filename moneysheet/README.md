@@ -279,3 +279,25 @@ bash ./gradlew check bootJar --no-daemon
 - Windows 빠른 테스트35개 통과. 동시10요청 중5개만 해시 진입, 각 키 용량 격리·만료, 인코딩 경로·컨텍스트 경로, 세션 동시 무효화, 예약 예외 정리 회귀 검증 포함.
 
 - 리뷰 수정 후 Ubuntu `check bootJar`: 빠른 테스트35개 + MySQL 통합 테스트4개 통과. 실제 HTTP 쿠키·동시 가입·계정 제한 회귀 확인.
+
+
+## Main 거래 및 도메인 Swagger — #16
+
+- 거래: `POST/GET /api/v1/months/{month}/transactions`, `GET/PUT/DELETE .../transactions/{id}`.
+- 소유한 READY 월에서만 기록하며 과거 READY 월도 수정·삭제 가능합니다. 금액1~9,999,999,999, 날짜와 관리 월 일치, 분 단위 시간, 제목255 코드포인트 이내를 검증합니다.
+- categoryId는 필수 JSON 키이며 미분류는 null입니다. 카테고리는 본인 소유 mainTransaction과 입출금 방향이 일치해야 합니다.
+- 목록의 date/direction은 선택 필터입니다. limit 기본50/최대100, 날짜·시간·ID 내림차순 키셋 커서입니다. expenseTotal/incomeTotal/total은 현재 페이지가 아닌 필터 전체 합계이며 입금-지출 부호를 사용합니다.
+- HMAC 서명 커서는 사용자·월·날짜·방향에 묶입니다. 프로세스별 임의 키이므로 서버 재시작 후 기존 커서는400이며 첫 페이지부터 다시 조회합니다. 기록 변경 중 페이지 snapshot은 보장하지 않습니다.
+- MySQL SUM은 BigDecimal로 받고 JS 안전 정수 범위를 넘으면 AMOUNT_RANGE_EXCEEDED입니다. JPA 자동 스키마 변경·Flyway V1 수정은 없습니다.
+- Main 일반 입금은 Monthly 수익을 자동 생성하지 않습니다. FE 기록 연동 및 메모/지급/Monthly/요약은 후속 작업입니다.
+
+local Swagger UI:
+- 인증: `/swagger-ui/index.html?urls.primaryName=auth`
+- 카테고리: `/swagger-ui/index.html?urls.primaryName=categories`
+- 예산: `/swagger-ui/index.html?urls.primaryName=budgets`
+- 내역: `/swagger-ui/index.html?urls.primaryName=transactions`
+- UI 상단 문서 선택으로도 전환합니다. 독립 명세는 `/v3/api-docs/{group}`, 전체 명세 `/v3/api-docs`도 유지합니다.
+- 그룹에도 공통 오류 스키마·응답, 세션/CSRF·STRICT 표현·닫힌 DTO 스키마를 적용합니다. 서버 주입 CsrfToken은 사용자 입력에서 숨겼습니다.
+- 인증 그룹에서 CSRF 취득 → Authorize → 로그인 → CSRF 재취득 후 업무 그룹으로 이동합니다. 브라우저가 세션 쿠키를 유지하며 필요한 CSRF 입력은 최신 토큰을 사용합니다.
+- Swagger는 local에서만 노출합니다. 상기 주소는 BE 호스트/포트 뒤에 붙입니다. 실제 브라우저에서 도메인 전환·직접 URL·CSRF Try it out을 검증했습니다.
+- 테스트 실제 결과와 CI 상태는 해당 PR에 기록합니다. 통합 테스트는 임시 MySQL을 사용하며 개발 DB 비밀값에 의존하지 않습니다.

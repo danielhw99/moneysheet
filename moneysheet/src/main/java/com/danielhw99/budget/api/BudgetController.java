@@ -9,6 +9,8 @@ import com.danielhw99.common.api.ApiId;
 import com.danielhw99.common.error.ApiException;
 import com.danielhw99.common.error.ErrorCode;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -57,6 +59,7 @@ public class BudgetController {
     }
 
     @PostMapping("/budget-items")
+    @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<BudgetDtos.Item> createItem(@AuthenticationPrincipal AuthPrincipal principal,
                                                        @PathVariable String month,
                                                        @RequestBody BudgetDtos.ItemInput input) {
@@ -72,6 +75,7 @@ public class BudgetController {
                 .body(service.updateItem(principal.userId(), parseMonth(month), parseItemId(id), input));
     }
 
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     @DeleteMapping("/budget-items/{id}")
     public ResponseEntity<Void> deleteItem(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable String month, @PathVariable String id) {

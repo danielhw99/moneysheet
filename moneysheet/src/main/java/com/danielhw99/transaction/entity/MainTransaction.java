@@ -68,6 +68,16 @@ public class MainTransaction extends BaseEntity {
         this.category = category;
     }
 
+    public void update(LocalDate date, LocalTime time, String title, Long amount,
+            TransactionDirection direction, Category category) {
+        this.occurredOn = date;
+        this.occurredTime = time;
+        this.title = title;
+        this.amount = amount;
+        this.direction = direction;
+        this.category = category;
+    }
+
     public MonthlyBudget getMonthlyBudget() {
         return monthlyBudget;
     }

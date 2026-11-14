@@ -18,3 +18,4 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+    urls-primary-name: auth
