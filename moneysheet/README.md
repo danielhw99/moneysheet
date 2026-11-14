@@ -301,3 +301,24 @@ local Swagger UI:
 - 인증 그룹에서 CSRF 취득 → Authorize → 로그인 → CSRF 재취득 후 업무 그룹으로 이동합니다. 브라우저가 세션 쿠키를 유지하며 필요한 CSRF 입력은 최신 토큰을 사용합니다.
 - Swagger는 local에서만 노출합니다. 상기 주소는 BE 호스트/포트 뒤에 붙입니다. 실제 브라우저에서 도메인 전환·직접 URL·CSRF Try it out을 검증했습니다.
 - 테스트 실제 결과와 CI 상태는 해당 PR에 기록합니다. 통합 테스트는 임시 MySQL을 사용하며 개발 DB 비밀값에 의존하지 않습니다.
+
+## V2 — 고정여유비를 일반 고정비로 통합
+
+- 이 절은 앞선 V1/JPA 검증 기록보다 우선하는 현재 정책입니다.
+- `fixed_budget_items.kind`, `allowance_month_id`, 전용 CHECK/UNIQUE를 제거합니다. V1 파일은 변경하지 않습니다.
+- 항목 ID·이름·카테고리·금액·지급 참조는 유지됩니다. 과거 고정여유비도 실제 지급 기록이 없으면 미지급입니다.
+- 예산 API의 `kind`/`automatic`을 제거합니다. 첫 월 준비는 빈 고정비 목록과 미입력 식비입니다.
+- 고정비·내역 카테고리 영역 분리, 양수 식비, 예산 준비/완료 및 지난달 예산 수정 제한은 유지합니다.
+- 새 여유비 공식은 모든 월에 동일합니다: 월 1일 기초 0원, 같은 월 전날 마감 + 오늘 식비 - 오늘 본인 지출.
+- BE 요약 API 구현은 #20 후속입니다. 이번 변경으로 요약 API가 완성되는 것은 아닙니다.
+
+### 개발 DB 전환 절차 (병합 후 수행)
+
+1. 연결된 FE/BE 쓰기를 중지하고 DB 백업·복원 가능 여부를 확인합니다.
+2. 기존 명시적 migration 환경변수 `MIGRATION_DB_URL`, `MIGRATION_DB_USERNAME=moneysheet_migration`, `MIGRATION_DB_PASSWORD`를 설정합니다. 값을 로그나 Git에 남기지 않습니다.
+3. Java 21 환경에서 `./gradlew dbInfo dbValidate`로 V1 적용 상태와 V2 대기를 확인합니다.
+4. `./gradlew dbMigrate` 실행 후 `./gradlew dbInfo dbValidate`로 V2 성공을 확인합니다. 일반 앱 실행으로 migration을 수행하지 않습니다.
+5. FE #23과 BE #28 버전을 함께 전환하고 예산 조회/생성/편집·지급 참조를 확인한 뒤 쓰기를 재개합니다.
+6. 이전 BE는 제거된 kind를 요구하므로 V2 뒤에 이전 바이너리만 되돌리지 않습니다. 실패 시 쓰기를 유지 중지하고 백업 또는 별도 검토한 전진 migration으로 복구합니다. MySQL DDL의 트랜잭션 롤백을 가정하지 않습니다.
+
+검증용 V1→V2 테스트는 격리 Testcontainers DB만 사용합니다. 이 PR에서 실제 개발 DB에는 V2를 적용하지 않습니다.

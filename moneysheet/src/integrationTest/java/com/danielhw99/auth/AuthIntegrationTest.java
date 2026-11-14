@@ -73,7 +73,7 @@ class AuthIntegrationTest {
   String freshToken=mapper.readTree(fresh.getResponse().getContentAsString()).get("token").asText();
   mvc.perform(post("/api/v1/auth/logout").session(session).header("X-CSRF-TOKEN",freshToken)).andExpect(status().isNoContent());
   mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
-  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1",Long.class)).isEqualTo(1);
+  assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank", String.class)).containsExactly("1", "2");
  }
 
  @Test void concurrentSignupPreservesUniqueEmail() throws Exception {
