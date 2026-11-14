@@ -23,12 +23,19 @@ class SwaggerDomainTest {
         var page = converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.transaction.api.TransactionList.class));
         assertThat(page.schema.getRequired()).containsExactlyInAnyOrder("rows","nextCursor","expenseTotal","incomeTotal","total");
     }
-    @Test void fourIndependentDomainGroupsAreDeclared() throws Exception {
+    @Test void fiveIndependentDomainGroupsAreDeclared() throws Exception {
         var methods = Arrays.stream(OpenApiConfiguration.class.getDeclaredMethods())
                 .filter(method -> method.getReturnType() == GroupedOpenApi.class).toList();
-        assertThat(methods).hasSize(4);
+        assertThat(methods).hasSize(5);
         var names = new java.util.ArrayList<String>();
         for (var method : methods) names.add(((GroupedOpenApi) method.invoke(new OpenApiConfiguration())).getGroup());
-        assertThat(names).containsExactlyInAnyOrder("auth", "categories", "budgets", "transactions");
+        assertThat(names).containsExactlyInAnyOrder("auth", "categories", "budgets", "transactions", "memos");
+    }
+    @Test void memoResponsesDeclareAllRequiredFields() {
+        var converter=io.swagger.v3.core.converter.ModelConverters.getInstance();
+        var response=converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.memo.api.MemoResponse.class));
+        assertThat(response.schema.getRequired()).containsExactlyInAnyOrder("id","date","time","title","amount","direction","completedOn");
+        var page=converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.memo.api.MemoList.class));
+        assertThat(page.schema.getRequired()).containsExactlyInAnyOrder("rows","nextCursor","expenseTotal","incomeTotal","total","pendingMemoTotal");
     }
 }

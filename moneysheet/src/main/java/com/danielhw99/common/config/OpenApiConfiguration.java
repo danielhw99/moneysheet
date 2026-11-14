@@ -36,7 +36,7 @@ public class OpenApiConfiguration {
         return new OpenAPI().info(new Info().title("MoneySheet API").version("v1")
                 .description("개발용 API 문서입니다. 실제 구현된 API만 표시합니다. "
                         + "성공은 DTO 직접 반환, 오류는 code/message/fieldErrors/traceId 형식입니다. "
-                        + "삭제 성공 204는 본문이 없습니다. 설계 기준 계약은 v0.1.1입니다."))
+                        + "삭제 성공 204는 본문이 없습니다. 설계 기준 계약은 v0.2.0입니다."))
                 .components(components);
     }
 
@@ -61,6 +61,12 @@ public class OpenApiConfiguration {
     @Bean
     public GroupedOpenApi transactionDocumentation() {
         return GroupedOpenApi.builder().group("transactions").pathsToMatch("/api/v1/months/*/transactions", "/api/v1/months/*/transactions/**").build();
+    }
+
+    @Bean
+    public GroupedOpenApi memoDocumentation() {
+        return GroupedOpenApi.builder().group("memos").pathsToMatch(
+                "/api/v1/months/*/memos", "/api/v1/months/*/memos/**").build();
     }
 
     @Bean
