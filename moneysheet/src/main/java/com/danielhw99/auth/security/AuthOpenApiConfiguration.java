@@ -2,7 +2,7 @@ package com.danielhw99.auth.security;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.parameters.Parameter;
-import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springdoc.core.customizers.GlobalOpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Profile;
 @Configuration(proxyBeanMethods=false)
 @Profile("local")
 public class AuthOpenApiConfiguration {
-    @Bean public OpenApiCustomizer sessionAndCsrfDocumentation() {
+    @Bean public GlobalOpenApiCustomizer sessionAndCsrfDocumentation() {
         return openApi -> {
             openApi.getComponents().addSecuritySchemes("sessionCookie",new SecurityScheme()
                     .type(SecurityScheme.Type.APIKEY).in(SecurityScheme.In.COOKIE).name("JSESSIONID")
