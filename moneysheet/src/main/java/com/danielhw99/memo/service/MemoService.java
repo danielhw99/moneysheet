@@ -54,6 +54,22 @@ public class MemoService {
         records.delete(owned(owner, month, id, true));
     }
 
+    @Transactional
+    public MemoResponse complete(Long owner, YearMonth month, Long id, LocalDate completedOn) {
+        MoneyMemo record = owned(owner, month, id, true);
+        if (completedOn == null) throw new ApiException(ErrorCode.VALIDATION);
+        validateCompletion(month, record.getOccurredOn(), completedOn);
+        record.complete(completedOn);
+        return response(record);
+    }
+
+    @Transactional
+    public MemoResponse cancelCompletion(Long owner, YearMonth month, Long id) {
+        MoneyMemo record = owned(owner, month, id, true);
+        record.complete(null);
+        return response(record);
+    }
+
     private MoneyMemo owned(Long owner, YearMonth month, Long id, boolean write) {
         if (id == null || id < 1) throw new ApiException(ErrorCode.VALIDATION);
         var found = write ? records.findLockedById(id) : records.findById(id);

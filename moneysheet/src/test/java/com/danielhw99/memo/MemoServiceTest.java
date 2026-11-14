@@ -78,5 +78,20 @@ class MemoServiceTest {
  @Test void deletionUsesTheSameWriteLockAsOtherEdits() {
   var row=record(null);service.delete(1L,month,91L);verify(records).findLockedById(91L);verify(records).delete(row);
  }
+ @Test void completingOverwritesOnlyTheCurrentDateAndCancellationIsIdempotent() {
+  var row=record(null);
+  assertThat(service.complete(1L,month,91L,month.atDay(4)).completedOn()).isEqualTo(month.atDay(4));
+  assertThat(service.complete(1L,month,91L,month.atDay(5)).completedOn()).isEqualTo(month.atDay(5));
+  assertThat(service.cancelCompletion(1L,month,91L).completedOn()).isNull();
+  assertThat(service.cancelCompletion(1L,month,91L).completedOn()).isNull();
+  assertThat(row.getAmount()).isEqualTo(100);
+ }
+ @Test void invalidCompletionsDoNotChangeTheMemo() {
+  var row=record(null);
+  for(LocalDate date:List.of(month.atDay(1),month.plusMonths(1).atDay(1))) code(ErrorCode.VALIDATION,()->service.complete(1L,month,91L,date));
+  code(ErrorCode.VALIDATION,()->service.complete(1L,month,91L,null));
+  code(ErrorCode.NOT_FOUND,()->service.complete(2L,month,91L,month.atDay(4)));
+  assertThat(row.getCompletedOn()).isNull();
+ }
  static void code(ErrorCode expected,Runnable call) { assertThatThrownBy(call::run).isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(expected); }
 }

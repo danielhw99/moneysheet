@@ -100,4 +100,7 @@ public class MoneyMemo extends BaseEntity {
         this.amount = amount;
         this.direction = direction;
     }
+    public void complete(LocalDate completedOn) {
+        this.completedOn = completedOn;
+    }
 }

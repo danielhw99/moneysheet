@@ -1,6 +1,7 @@
 package com.danielhw99.memo.api;
 
 import java.time.YearMonth;
+import com.danielhw99.memo.service.MemoReadService;
 import java.time.LocalDate;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.danielhw99.auth.security.AuthPrincipal;
@@ -29,7 +30,32 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/months/{month}/memos")
 public class MemoController {
     private final MemoService service;
-    public MemoController(MemoService service) { this.service = service; }
+    private final MemoReadService reads;
+    public MemoController(MemoService service, MemoReadService reads) { this.service = service; this.reads = reads; }
+
+    @GetMapping
+    public ResponseEntity<MemoList> list(@AuthenticationPrincipal AuthPrincipal user,
+            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month,
+            @Parameter(description = "선택일 필수. pending=활성 판단일, completed=완료일, all=발생일") @RequestParam LocalDate date,
+            @RequestParam(defaultValue = "pending") MemoStatus status,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(100) int limit) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(reads.list(user.userId(), month, date, status, cursor, limit));
+    }
+
+    @PutMapping("/{id}/completion")
+    public ResponseEntity<MemoResponse> complete(@AuthenticationPrincipal AuthPrincipal user,
+            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month,
+            @PathVariable ApiId id, @Valid @RequestBody MemoCompletionInput input) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.complete(user.userId(), month, id.value(), input.completedOn()));
+    }
+
+    @DeleteMapping("/{id}/completion")
+    public ResponseEntity<MemoResponse> cancelCompletion(@AuthenticationPrincipal AuthPrincipal user,
+            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month,
+            @PathVariable ApiId id) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.cancelCompletion(user.userId(), month, id.value()));
+    }
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<MemoResponse> create(@AuthenticationPrincipal AuthPrincipal user,

@@ -46,6 +46,8 @@ class MemoMvcTest {
     MemoService service;
     @MockitoBean
     AuthRateLimiter limiter;
+    @MockitoBean
+    com.danielhw99.memo.service.MemoReadService reads;
 
     private final String path = "/api/v1/months/2026-11/memos";
     private final String valid = "{\"date\":\"2026-11-01\",\"time\":\"12:30\",\"title\":\"점심\",\"amount\":9000,\"direction\":\"expense\"}";
@@ -74,6 +76,35 @@ class MemoMvcTest {
         mvc.perform(post(path).session(session(7L)).contentType(MediaType.APPLICATION_JSON).content(valid)).andExpect(status().isForbidden());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(path+"/1").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isNoContent()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+    }
+    @Test void listRequiresDateAndBindsStatusStrictly() throws Exception {
+        when(reads.list(7L,java.time.YearMonth.of(2026,11),java.time.LocalDate.of(2026,11,3),com.danielhw99.memo.api.MemoStatus.PENDING,null,50))
+                .thenReturn(new com.danielhw99.memo.api.MemoList(List.of(),null,0,0,0,-45000));
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-03"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.rows").isEmpty()).andExpect(jsonPath("$.pendingMemoTotal").value(-45000));
+        mvc.perform(get(path).session(session(7L))).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-03").param("status","PENDING")).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-31")).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-03").param("limit","101")).andExpect(status().isBadRequest());
+    }
+    @Test void completionAndCancellationReturnDtoWith200AndRequireCsrf() throws Exception {
+        var done=new MemoResponse(new ApiId(91L),java.time.LocalDate.of(2026,11,1),java.time.LocalTime.NOON,"정산",1L,MemoDirectionValue.EXPENSE,java.time.LocalDate.of(2026,11,4));
+        when(service.complete(7L,java.time.YearMonth.of(2026,11),91L,java.time.LocalDate.of(2026,11,4))).thenReturn(done);
+        when(service.cancelCompletion(7L,java.time.YearMonth.of(2026,11),91L)).thenReturn(response());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path+"/91/completion").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"completedOn\":\"2026-11-04\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.completedOn").value("2026-11-04"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(path+"/91/completion").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.completedOn").value(org.hamcrest.Matchers.nullValue())).andExpect(header().string("Cache-Control","no-store"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(path+"/91/completion").session(session(7L))).andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path+"/91/completion").session(session(7L)).contentType(MediaType.APPLICATION_JSON).content("{\"completedOn\":\"2026-11-04\"}"))
+                .andExpect(status().isForbidden());
+    }
+    @Test void completionCannotBeChangedThroughGeneralUpdateOrMalformedCompletionInput() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path+"/91").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON).content(valid.replace("}",",\"completedOn\":\"2026-11-04\"}")))
+                .andExpect(status().isBadRequest());
+        for(String body:List.of("{}","{\"completedOn\":null}","{\"completedOn\":\"2026-11-31\"}"))
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path+"/91/completion").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
     }
     private MockHttpSession session(Long userId) {
         var principal = new AuthPrincipal(userId, "user@example.com", "User");
