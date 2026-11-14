@@ -46,6 +46,8 @@ class CashFlowMvcTest {
     CashFlowService service;
     @MockitoBean
     AuthRateLimiter limiter;
+    @MockitoBean
+    com.danielhw99.cashflow.service.CashFlowReadService reads;
 
     private final String path = "/api/v1/months/2026-11/cash-flows";
     private final String valid = "{\"date\":\"2026-11-01\",\"time\":\"12:30\",\"title\":\"점심\",\"amount\":9000,\"kind\":\"extraExpense\"}";
@@ -74,6 +76,16 @@ class CashFlowMvcTest {
         mvc.perform(post(path).session(session(7L)).contentType(MediaType.APPLICATION_JSON).content(valid)).andExpect(status().isForbidden());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(path+"/1").session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isNoContent()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+    }
+    @Test void listBindsDateKindAndLimitStrictly() throws Exception {
+        when(reads.list(7L,java.time.YearMonth.of(2026,11),java.time.LocalDate.of(2026,11,1),CashFlowKindValue.EXTRA_EXPENSE,null,1))
+                .thenReturn(new com.danielhw99.cashflow.api.CashFlowList(List.of(),null,20000,0,-20000));
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-01").param("kind","extraExpense").param("limit","1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.rows").isEmpty()).andExpect(jsonPath("$.total").value(-20000));
+        for(String kind:List.of("INCOME","EXTRA_EXPENSE","extraexpense","expense"," income "))
+            mvc.perform(get(path).session(session(7L)).param("kind",kind)).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("date","2026-11-31")).andExpect(status().isBadRequest());
+        mvc.perform(get(path).session(session(7L)).param("limit","101")).andExpect(status().isBadRequest());
     }
     private MockHttpSession session(Long userId) {
         var principal = new AuthPrincipal(userId, "user@example.com", "User");

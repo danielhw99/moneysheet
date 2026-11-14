@@ -1,6 +1,11 @@
 package com.danielhw99.cashflow.api;
 
 import java.time.YearMonth;
+import java.time.LocalDate;
+import com.danielhw99.cashflow.service.CashFlowReadService;
+import org.springframework.web.bind.annotation.RequestParam;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import com.danielhw99.auth.security.AuthPrincipal;
 import com.danielhw99.common.api.ApiId;
 import com.danielhw99.cashflow.service.CashFlowService;
@@ -25,7 +30,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/months/{month}/cash-flows")
 public class CashFlowController {
     private final CashFlowService service;
-    public CashFlowController(CashFlowService service) { this.service = service; }
+    private final CashFlowReadService reads;
+    public CashFlowController(CashFlowService service, CashFlowReadService reads) { this.service = service; this.reads = reads; }
+    @GetMapping
+    public ResponseEntity<CashFlowList> list(@AuthenticationPrincipal AuthPrincipal user,
+            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month,
+            @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) CashFlowKindValue kind,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(100) int limit) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(reads.list(user.userId(),month,date,kind,cursor,limit));
+    }
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<CashFlowResponse> create(@AuthenticationPrincipal AuthPrincipal user,
