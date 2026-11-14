@@ -68,4 +68,11 @@ public class FixedPayment extends BaseEntity {
     public Long getAmount() {
         return amount;
     }
+    public void update(FixedBudgetItem item, LocalDate date, LocalTime time, String title, Long amount) {
+        this.fixedBudgetItem = item;
+        this.occurredOn = date;
+        this.occurredTime = time;
+        this.title = title;
+        this.amount = amount;
+    }
 }

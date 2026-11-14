@@ -23,13 +23,13 @@ class SwaggerDomainTest {
         var page = converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.transaction.api.TransactionList.class));
         assertThat(page.schema.getRequired()).containsExactlyInAnyOrder("rows","nextCursor","expenseTotal","incomeTotal","total");
     }
-    @Test void fiveIndependentDomainGroupsAreDeclared() throws Exception {
+    @Test void sixIndependentDomainGroupsAreDeclared() throws Exception {
         var methods = Arrays.stream(OpenApiConfiguration.class.getDeclaredMethods())
                 .filter(method -> method.getReturnType() == GroupedOpenApi.class).toList();
-        assertThat(methods).hasSize(5);
+        assertThat(methods).hasSize(6);
         var names = new java.util.ArrayList<String>();
         for (var method : methods) names.add(((GroupedOpenApi) method.invoke(new OpenApiConfiguration())).getGroup());
-        assertThat(names).containsExactlyInAnyOrder("auth", "categories", "budgets", "transactions", "memos");
+        assertThat(names).containsExactlyInAnyOrder("auth", "categories", "budgets", "transactions", "memos", "payments");
     }
     @Test void memoResponsesDeclareAllRequiredFields() {
         var converter=io.swagger.v3.core.converter.ModelConverters.getInstance();
@@ -37,5 +37,12 @@ class SwaggerDomainTest {
         assertThat(response.schema.getRequired()).containsExactlyInAnyOrder("id","date","time","title","amount","direction","completedOn");
         var page=converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.memo.api.MemoList.class));
         assertThat(page.schema.getRequired()).containsExactlyInAnyOrder("rows","nextCursor","expenseTotal","incomeTotal","total","pendingMemoTotal");
+    }
+    @Test void paymentResponsesDeclareAllRequiredFields() {
+        var converter=io.swagger.v3.core.converter.ModelConverters.getInstance();
+        var response=converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.payment.api.PaymentResponse.class));
+        assertThat(response.schema.getRequired()).containsExactlyInAnyOrder("id","date","time","title","amount","budgetItemId");
+        var page=converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.payment.api.PaymentList.class));
+        assertThat(page.schema.getRequired()).containsExactlyInAnyOrder("rows","nextCursor","expenseTotal","incomeTotal","total");
     }
 }
