@@ -322,3 +322,18 @@ local Swagger UI:
 6. 이전 BE는 제거된 kind를 요구하므로 V2 뒤에 이전 바이너리만 되돌리지 않습니다. 실패 시 쓰기를 유지 중지하고 백업 또는 별도 검토한 전진 migration으로 복구합니다. MySQL DDL의 트랜잭션 롤백을 가정하지 않습니다.
 
 검증용 V1→V2 테스트는 격리 Testcontainers DB만 사용합니다. 이 PR에서 실제 개발 DB에는 V2를 적용하지 않습니다.
+
+## 메모 API — 이슈 #17
+
+- `/api/v1/months/{month}/memos`: POST 생성(201), GET 목록(200).
+- `/{id}`: GET 상세, PUT 일반 수정(200), DELETE 삭제(204).
+- `/{id}/completion`: PUT 완료일 설정/덮어쓰기, DELETE 완료 취소. 두 작업 모두 메모 DTO를 200으로 반환합니다.
+- 일반 입력은 date/time/title/amount/direction만 받습니다. 완료일은 별도 API로만 변경하며 별도 이력은 저장하지 않습니다.
+- 로그인 본인의 해당 READY 월만 사용. 메모 기록은 지난달에도 수정할 수 있지만 다른 월로 이동할 수 없습니다. 예산 편집 제한과 구분합니다.
+- 금액은 1~9,999,999,999원, 시각은 HH:mm. 완료일은 발생일 이상·같은 월이며 완료 상태의 발생일 수정에도 이 제약을 유지합니다.
+- `GET ?date=2026-11-03&status=pending`: date 필수, status는 pending/completed/all(기본 pending). pending은 발생일<=선택일, 완료일 없음 또는 선택일 이후. completed는 완료일=선택일, all은 발생일=선택일.
+- `limit` 기본50·최대100, 정렬은 발생일/시각/ID 내림차순. 반환 nextCursor는 같은 사용자·월·선택일·status에서만 사용. 서버 재시작 시 첫 페이지부터 다시 조회합니다.
+- expenseTotal/incomeTotal은 페이지 전체가 아닌 필터 전체 합계입니다. total은 입금-지출, pendingMemoTotal은 status/페이지와 독립적인 선택일 활성 메모의 입금-지출 합계입니다.
+- 완료·취소·수정·삭제를 행 잠금으로 직렬화합니다. 입력·완료 처리는 일반 거래를 자동 생성하지 않습니다.
+- Swagger UI 도메인 선택의 `memos`에서 확인합니다. 실행 중인 이전 앱은 새 빌드로 재시작해야 새 그룹이 표시됩니다.
+- Main 계산(BE #20)과 FE 실제 연결(FE #20)은 후속입니다. 이 작업에서 개발 DB migration이나 비밀 파일 변경은 수행하지 않습니다.
