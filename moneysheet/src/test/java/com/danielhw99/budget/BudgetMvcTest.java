@@ -58,7 +58,7 @@ class BudgetMvcTest {
         mvc.perform(put("/api/v1/months/2026-11/budget-setup")
                 .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"items\":[{\"kind\":\"fixedExpense\",\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
+                .content("{\"items\":[{\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
         verifyNoInteractions(budgets);
     }
@@ -67,7 +67,7 @@ class BudgetMvcTest {
         mvc.perform(put("/api/v1/months/2026-11/budget-setup")
                 .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"items\":[{\"id\":null,\"kind\":\"fixedExpense\",\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
+                .content("{\"items\":[{\"id\":null,\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
         verify(budgets).setup(eq(7L),
                 eq(YearMonth.of(2026, 11)),
@@ -93,12 +93,12 @@ class BudgetMvcTest {
 
     @Test void itemCreationSerializesStringIdAndDeletionHasNoBody() throws Exception {
         when(budgets.createItem(eq(7L), any(), any()))
-                .thenReturn(new BudgetDtos.Item(new ApiId(101L), BudgetDtos.Kind.FIXED_EXPENSE, "Rent", new ApiId(1L), 100L));
+                .thenReturn(new BudgetDtos.Item(new ApiId(101L), "Rent", new ApiId(1L), 100L));
         mvc.perform(post("/api/v1/months/2026-11/budget-items").session(session(7L))
                 .with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"kind\":\"fixedExpense\",\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}"))
+                .content("{\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}"))
                 .andExpect(status().isCreated()).andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(jsonPath("$.id").value("101")).andExpect(jsonPath("$.kind").value("fixedExpense"));
+                .andExpect(jsonPath("$.id").value("101")).andExpect(jsonPath("$.kind").doesNotExist());
         mvc.perform(delete("/api/v1/months/2026-11/budget-items/101")
                 .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isNoContent()).andExpect(content().string(""));

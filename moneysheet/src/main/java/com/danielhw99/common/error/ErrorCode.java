@@ -16,6 +16,7 @@ public enum ErrorCode {
     PAYMENT_EXCEEDS_BUDGET(HttpStatus.CONFLICT, "지급액이 남은 예산을 초과합니다."),
     BUDGET_BELOW_PAID(HttpStatus.CONFLICT, "예산은 지급된 금액보다 작을 수 없습니다."),
     REFERENCED(HttpStatus.CONFLICT, "다른 기록에서 사용 중인 항목입니다."),
+    // Reserved legacy error code; no active policy forbids ordinary fixed payments.
     ALLOWANCE_PAYMENT_FORBIDDEN(HttpStatus.CONFLICT, "고정여유비는 수동 지급할 수 없습니다."),
     AMOUNT_RANGE_EXCEEDED(HttpStatus.CONFLICT, "계산 금액이 허용 범위를 초과했습니다."),
     CONFLICT(HttpStatus.CONFLICT, "요청이 현재 상태와 충돌합니다."),
