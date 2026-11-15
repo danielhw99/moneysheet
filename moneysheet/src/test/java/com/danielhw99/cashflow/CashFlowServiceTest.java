@@ -22,9 +22,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class CashFlowServiceTest {
+ final com.danielhw99.user.repository.UserRepository users=mock(com.danielhw99.user.repository.UserRepository.class);
+ @org.junit.jupiter.api.BeforeEach void activeOwner(){when(users.findWithLockingById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(Optional.of(mock(User.class)));}
+
     final MonthlyCashFlowRepository records=mock(MonthlyCashFlowRepository.class);
     final MonthlyBudgetRepository budgets=mock(MonthlyBudgetRepository.class);
-    final CashFlowService service=new CashFlowService(records,budgets);
+    final CashFlowService service=new CashFlowService(records,budgets,users);
     final YearMonth month=YearMonth.of(2026,11);
     CashFlowInput input(long amount,CashFlowKindValue kind) { return new CashFlowInput(month.atDay(2),LocalTime.NOON,"  Salary  ",amount,kind); }
     MonthlyBudget budget(BudgetSetupStatus status) {

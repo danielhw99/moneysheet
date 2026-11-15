@@ -1,5 +1,7 @@
 package com.danielhw99.budget.service;
 
+import com.danielhw99.auth.security.ActiveAccount;
+
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,7 +60,7 @@ public class BudgetService {
     @Transactional
     public Preparation prepare(Long userId, YearMonth month) {
         calendar.requireWritable(month);
-        var owner = users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        var owner = ActiveAccount.requireCurrent(users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
         calendar.requireWritable(month);
         var existing = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1));
         var previous = budgets.findByUser_IdAndMonthStart(userId, month.minusMonths(1).atDay(1));
@@ -98,7 +100,7 @@ public class BudgetService {
     @Transactional
     public Summary setup(Long userId, YearMonth month, SetupInput input) {
         calendar.requireWritable(month);
-        users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        ActiveAccount.requireCurrent(users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
         calendar.requireWritable(month);
         MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(userId, month.atDay(1))
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
@@ -224,7 +226,7 @@ public class BudgetService {
 
     private void lockWritableMonth(Long userId, YearMonth month) {
         calendar.requireWritable(month);
-        users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        ActiveAccount.requireCurrent(users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
         calendar.requireWritable(month);
     }
 

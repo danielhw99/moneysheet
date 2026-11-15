@@ -1,8 +1,9 @@
 package com.danielhw99.category.service;
 
+import com.danielhw99.auth.security.ActiveAccount;
+
 import java.util.List;
 import java.util.Locale;
-import java.sql.SQLException;
 
 import com.danielhw99.category.api.CategoryDirectionValue;
 import com.danielhw99.category.api.CategoryInput;
@@ -16,7 +17,6 @@ import com.danielhw99.common.error.ErrorCode;
 import com.danielhw99.user.repository.UserRepository;
 
 import org.springframework.stereotype.Service;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -45,6 +45,7 @@ public class CategoryService {
         return result.stream().map(CategoryResponse::from).toList();
     }
 
+    @Transactional
     public CategoryResponse createOrReuse(Long userId, CategoryInput input) {
         if (input == null || input.scope() == null || input.name() == null) {
             throw new ApiException(ErrorCode.VALIDATION);
@@ -63,33 +64,12 @@ public class CategoryService {
                 || nameKey.codePointCount(0, nameKey.length()) > 100) {
             throw new ApiException(ErrorCode.VALIDATION);
         }
+        var owner = ActiveAccount.requireCurrent(users.findWithLockingById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
         var existing = categories.findByUser_IdAndScopeAndDirectionAndNameKey(
                 userId, input.scope().entityValue(), direction, nameKey);
         if (existing.isPresent()) return CategoryResponse.from(existing.get());
-        var owner = users.findById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
-        try {
-            // Repository saveAndFlush owns its transaction; no service transaction remains aborted on failure.
-            return CategoryResponse.from(categories.saveAndFlush(new Category(
-                    owner, input.scope().entityValue(), direction, name, nameKey)));
-        } catch (DataIntegrityViolationException failure) {
-            if (isCategoryNameDuplicate(failure)) {
-                return categories.findByUser_IdAndScopeAndDirectionAndNameKey(
-                                userId, input.scope().entityValue(), direction, nameKey)
-                        .map(CategoryResponse::from)
-                        .orElseThrow(() -> failure);
-            }
-            throw failure;
-        }
-    }
-
-    private boolean isCategoryNameDuplicate(Throwable failure) {
-        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            if (cause instanceof SQLException sql && sql.getErrorCode() == 1062
-                    && sql.getMessage() != null && sql.getMessage().contains("uq_categories_name")) {
-                return true;
-            }
-        }
-        return false;
+        return CategoryResponse.from(categories.saveAndFlush(new Category(
+                owner, input.scope().entityValue(), direction, name, nameKey)));
     }
 
     private String stripUnicodeSpace(String value) {

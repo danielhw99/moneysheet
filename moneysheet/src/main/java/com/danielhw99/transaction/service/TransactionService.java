@@ -1,5 +1,9 @@
 package com.danielhw99.transaction.service;
 
+import com.danielhw99.user.repository.UserRepository;
+
+import com.danielhw99.auth.security.ActiveAccount;
+
 import java.time.YearMonth;
 import com.danielhw99.transaction.api.TransactionInput;
 import com.danielhw99.transaction.api.TransactionResponse;
@@ -22,12 +26,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class TransactionService {
     private final MainTransactionRepository records;
     private final MonthlyBudgetRepository budgets;
+    private final UserRepository users;
     private final CategoryRepository categories;
-    public TransactionService(MainTransactionRepository records, MonthlyBudgetRepository budgets, CategoryRepository categories) {
+    public TransactionService(MainTransactionRepository records, MonthlyBudgetRepository budgets, CategoryRepository categories, UserRepository users) {
+        this.users=users;
         this.records = records; this.budgets = budgets; this.categories = categories;
     }
     @Transactional
     public TransactionResponse create(Long owner, YearMonth month, TransactionInput input) {
+        lockOwner(owner);
         MonthlyBudget budget = readyBudget(owner, month);
         validate(month, input);
         return response(records.saveAndFlush(new MainTransaction(budget, input.date(), input.time(),
@@ -37,6 +44,7 @@ public class TransactionService {
     public TransactionResponse get(Long owner, YearMonth month, Long id) { return response(owned(owner, month, id)); }
     @Transactional
     public TransactionResponse update(Long owner, YearMonth month, Long id, TransactionInput input) {
+        lockOwner(owner);
         MainTransaction record = owned(owner, month, id);
         validate(month, input);
         record.update(input.date(), input.time(), input.title().strip(), input.amount(),
@@ -44,7 +52,12 @@ public class TransactionService {
         return response(record);
     }
     @Transactional
-    public void delete(Long owner, YearMonth month, Long id) { records.delete(owned(owner, month, id)); }
+    public void delete(Long owner, YearMonth month, Long id) {
+        lockOwner(owner); records.delete(owned(owner, month, id)); }
+    private void lockOwner(Long owner) {
+        ActiveAccount.requireCurrent(users.findWithLockingById(owner)
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
+    }
     private MonthlyBudget readyBudget(Long owner, YearMonth month) {
         MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(owner, month.atDay(1))
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));

@@ -35,7 +35,7 @@ public class SecurityConfiguration {
     }
     @Bean public SecurityFilterChain apiSecurity(HttpSecurity http, SecurityErrorWriter errors,
             Environment environment, HttpSessionSecurityContextRepository contexts,
-            HttpSessionCsrfTokenRepository csrfTokens, Clock clock, AuthRateLimiter limiter) throws Exception {
+            HttpSessionCsrfTokenRepository csrfTokens, Clock clock, AuthRateLimiter limiter, com.danielhw99.user.repository.UserRepository users) throws Exception {
         http.formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable).requestCache(AbstractHttpConfigurer::disable)
                 .securityContext(context -> context.securityContextRepository(contexts))
@@ -52,6 +52,7 @@ public class SecurityConfiguration {
                     authorize.anyRequest().authenticated();
                 });
         http.addFilterAfter(new SessionExpiryFilter(clock), SecurityContextHolderFilter.class);
+        http.addFilterAfter(new AccountSessionFilter(users), SessionExpiryFilter.class);
         http.addFilterAfter(new AuthRateLimitFilter(limiter,errors), CsrfFilter.class);
         return http.build();
     }

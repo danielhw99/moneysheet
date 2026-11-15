@@ -1,5 +1,9 @@
 package com.danielhw99.memo.service;
 
+import com.danielhw99.user.repository.UserRepository;
+
+import com.danielhw99.auth.security.ActiveAccount;
+
 import java.time.LocalDate;
 import java.time.YearMonth;
 import com.danielhw99.memo.api.MemoInput;
@@ -20,13 +24,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemoService {
     private final MoneyMemoRepository records;
     private final MonthlyBudgetRepository budgets;
-    public MemoService(MoneyMemoRepository records, MonthlyBudgetRepository budgets) {
+    private final UserRepository users;
+    public MemoService(MoneyMemoRepository records, MonthlyBudgetRepository budgets, UserRepository users) {
+        this.users=users;
         this.records = records;
         this.budgets = budgets;
     }
 
     @Transactional
     public MemoResponse create(Long owner, YearMonth month, MemoInput input) {
+        lockOwner(owner);
         MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(owner, month.atDay(1))
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
         requireReady(budget);
@@ -42,6 +49,7 @@ public class MemoService {
 
     @Transactional
     public MemoResponse update(Long owner, YearMonth month, Long id, MemoInput input) {
+        lockOwner(owner);
         MoneyMemo record = owned(owner, month, id, true);
         validate(month, input);
         validateCompletion(month, input.date(), record.getCompletedOn());
@@ -51,11 +59,13 @@ public class MemoService {
 
     @Transactional
     public void delete(Long owner, YearMonth month, Long id) {
+        lockOwner(owner);
         records.delete(owned(owner, month, id, true));
     }
 
     @Transactional
     public MemoResponse complete(Long owner, YearMonth month, Long id, LocalDate completedOn) {
+        lockOwner(owner);
         MoneyMemo record = owned(owner, month, id, true);
         if (completedOn == null) throw new ApiException(ErrorCode.VALIDATION);
         validateCompletion(month, record.getOccurredOn(), completedOn);
@@ -65,11 +75,16 @@ public class MemoService {
 
     @Transactional
     public MemoResponse cancelCompletion(Long owner, YearMonth month, Long id) {
+        lockOwner(owner);
         MoneyMemo record = owned(owner, month, id, true);
         record.complete(null);
         return response(record);
     }
 
+    private void lockOwner(Long owner) {
+        ActiveAccount.requireCurrent(users.findWithLockingById(owner)
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
+    }
     private MoneyMemo owned(Long owner, YearMonth month, Long id, boolean write) {
         if (id == null || id < 1) throw new ApiException(ErrorCode.VALIDATION);
         var found = write ? records.findLockedById(id) : records.findById(id);

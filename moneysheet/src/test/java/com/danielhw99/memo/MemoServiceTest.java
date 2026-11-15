@@ -21,9 +21,12 @@ import com.danielhw99.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 class MemoServiceTest {
+ final com.danielhw99.user.repository.UserRepository users=mock(com.danielhw99.user.repository.UserRepository.class);
+ @org.junit.jupiter.api.BeforeEach void activeOwner(){when(users.findWithLockingById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(Optional.of(mock(User.class)));}
+
  final MoneyMemoRepository records=mock(MoneyMemoRepository.class);
  final MonthlyBudgetRepository budgets=mock(MonthlyBudgetRepository.class);
- final MemoService service=new MemoService(records,budgets);
+ final MemoService service=new MemoService(records,budgets,users);
  final YearMonth month=YearMonth.of(2026,11);
  MemoInput input(long amount) { return new MemoInput(month.atDay(2),LocalTime.NOON,"  정산  ",amount,MemoDirectionValue.EXPENSE); }
  MonthlyBudget ready() {
