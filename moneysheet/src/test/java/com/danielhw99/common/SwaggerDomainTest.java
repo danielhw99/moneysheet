@@ -23,13 +23,13 @@ class SwaggerDomainTest {
         var page = converter.resolveAsResolvedSchema(new io.swagger.v3.core.converter.AnnotatedType(com.danielhw99.transaction.api.TransactionList.class));
         assertThat(page.schema.getRequired()).containsExactlyInAnyOrder("rows","nextCursor","expenseTotal","incomeTotal","total");
     }
-    @Test void sevenIndependentDomainGroupsAreDeclared() throws Exception {
+    @Test void eightIndependentDomainGroupsAreDeclared() throws Exception {
         var methods = Arrays.stream(OpenApiConfiguration.class.getDeclaredMethods())
                 .filter(method -> method.getReturnType() == GroupedOpenApi.class).toList();
-        assertThat(methods).hasSize(7);
+        assertThat(methods).hasSize(8);
         var names = new java.util.ArrayList<String>();
         for (var method : methods) names.add(((GroupedOpenApi) method.invoke(new OpenApiConfiguration())).getGroup());
-        assertThat(names).containsExactlyInAnyOrder("auth", "categories", "budgets", "transactions", "memos", "payments", "cash-flows");
+        assertThat(names).containsExactlyInAnyOrder("auth", "categories", "budgets", "transactions", "memos", "payments", "cash-flows", "summaries");
     }
     @Test void memoResponsesDeclareAllRequiredFields() {
         var converter=io.swagger.v3.core.converter.ModelConverters.getInstance();

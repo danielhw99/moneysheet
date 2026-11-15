@@ -27,6 +27,7 @@ public class SummaryCalculator {
             LocalDate current=month.atDay(day);carry=free;todayFood=foodForDate(current,food);
             Amounts totals=ledger.transactions().getOrDefault(current,Amounts.zero());
             expense=positive(totals.expense());income=positive(totals.income());
+            // Validate the raw running aggregate even when food would offset it.
             cumulativeExpense=add(cumulativeExpense,expense);
             cumulativeIncome=add(cumulativeIncome,income);
             available=add(carry,todayFood);free=add(available,-expense);
@@ -34,18 +35,24 @@ public class SummaryCalculator {
         int end=date.getDayOfMonth()<=11?11:date.getDayOfMonth()<=21?21:month.lengthOfMonth();
         long remaining=0;
         for(int day=date.getDayOfMonth()+1;day<=end;day++) remaining=add(remaining,foodForDate(month.atDay(day),food));
-        long memoExpense=0,memoIncome=0,active=0,completed=0;
+        MemoState memos=memos(date,ledger);
+        long main=add(add(add(free,remaining),cumulativeIncome),memos.adjustment());
+        return new Day(carry,available,free,todayFood,remaining,expense,income,main,memos.active(),memos.completed());
+    }
+
+    public record MemoState(long adjustment,int active,int completed) {}
+    public MemoState memos(LocalDate date,Ledger ledger) {
+        YearMonth month=YearMonth.from(date);
+        long expense=0,income=0,active=0,completed=0;
         for(var memo:ledger.memos()) {
             if(!YearMonth.from(memo.date()).equals(month)) continue;
             if(memo.count()<0) throw range();
-            if(memo.date().compareTo(date)<=0 && (memo.completedOn()==null || memo.completedOn().isAfter(date))) {
-                memoExpense=add(memoExpense,positive(memo.expense()));memoIncome=add(memoIncome,positive(memo.income()));active=add(active,memo.count());
+            if(!memo.date().isAfter(date) && (memo.completedOn()==null || memo.completedOn().isAfter(date))) {
+                expense=add(expense,positive(memo.expense()));income=add(income,positive(memo.income()));active=add(active,memo.count());
             }
             if(date.equals(memo.completedOn())) completed=add(completed,memo.count());
         }
-        long memoAdjustment=add(memoIncome,-memoExpense);
-        long main=add(add(add(free,remaining),cumulativeIncome),memoAdjustment);
-        try { return new Day(carry,available,free,todayFood,remaining,expense,income,main,Math.toIntExact(active),Math.toIntExact(completed)); }
+        try { return new MemoState(add(income,-expense),Math.toIntExact(active),Math.toIntExact(completed)); }
         catch(ArithmeticException overflow) { throw range(); }
     }
 
