@@ -61,6 +61,14 @@ public class MonthlyCashFlow extends BaseEntity {
         this.kind = kind;
     }
 
+    // Month and kind are immutable after creation; only editable record fields change.
+    public void update(LocalDate date, LocalTime time, String title, Long amount) {
+        this.occurredOn = date;
+        this.occurredTime = time;
+        this.title = title;
+        this.amount = amount;
+    }
+
     public MonthlyBudget getMonthlyBudget() {
         return monthlyBudget;
     }
