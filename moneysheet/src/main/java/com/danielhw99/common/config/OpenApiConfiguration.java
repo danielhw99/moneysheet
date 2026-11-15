@@ -82,6 +82,11 @@ public class OpenApiConfiguration {
     }
 
     @Bean
+    public GroupedOpenApi summaryDocumentation() {
+        return GroupedOpenApi.builder().group("summaries").pathsToMatch("/api/v1/summaries/**").build();
+    }
+
+    @Bean
     public PropertyCustomizer temporalApiSchemas() {
         return (schema, type) -> {
             if (type.getType() == null) {

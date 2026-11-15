@@ -365,3 +365,18 @@ local Swagger UI:
 - Monthly 수익/지출은 Main 거래·메모·고정비 지급을 자동 생성하거나 변경하지 않습니다. 기본예산 전달을 그 외 지출로 자동 중복 기록하지 않습니다.
 - 이 API의 total은 수익−그 외 지출입니다. 고정비/식비 예산까지 차감한 Monthly 순증감 조회는 #20 후속이며 전체 통장 잔액을 뜻하지 않습니다.
 - local Swagger UI에서 `cash-flows` 그룹으로 조회합니다. 실제 개발 DB·비밀 파일·기존 실행 서버·FE·Flyway SQL 변경은 없습니다.
+
+### 홈·Daily·Monthly 요약 API (#20)
+
+- `GET /api/v1/summaries/daily?date=yyyy-MM-dd`, `monthly?month=yyyy-MM`, `home?month=yyyy-MM`. 인증된 사용자 소유의 READY 예산만 읽습니다. GET으로 예산/기록을 생성하지 않으며 응답은 DTO 직접 반환 및 no-store입니다.
+- 월1일 기초 여유비0. 오늘 마감 여유비=전날 마감+오늘 식비−오늘 본인 지출. Main 일반 입금·메모·고정비 지급·Monthly 수익/지출은 여유비에 영향이 없습니다.
+- Main=오늘 마감 여유비+현재 회차에서 오늘 다음날부터 마지막날까지의 식비 예산+같은 달 누적 Main 일반 입금+조회일 활성 메모의 부호 합계입니다.
+- 식비는 공휴일과 관계없이 주중/토/일 설정을 사용하고 회차는1~11일/12~21일/22~월말입니다. 11일·21일·월말에는 남은 회차 식비0입니다. 월별 잔액·메모 이월이나 고정여유비 자동 지급은 없습니다.
+- 메모는 발생일≤조회일이고 완료일이 없거나 완료일>조회일일 때 활성입니다. 완료일 당일부터 Main에서 제외되며 과거 날짜에는 당시 활성 상태로 계산됩니다.
+- Daily expenseTotal/incomeTotal은 선택일 Main 지출/입금 합계입니다. transactions는 해당 날짜 전체 내역, activeMemos는 해당 날짜의 모든 활성 메모, payments는 해당 날짜 지급 전체입니다. 배열은 목록 cursor/limit와 무관하며 임의로100개로 자르지 않습니다. 매우 큰 일자 응답의 UI 페이징 전환은 후속 계약 변경으로 다룹니다.
+- Daily 지급의 paid/remaining/complete는 조회일까지 누적한 실제 지급액 기준입니다. 미래 지급으로 과거 날짜의 완료 상태를 바꾸지 않습니다. Monthly 예산의 지급 요약은 기존 월 전체 기록 기준입니다.
+- Monthly totalExpense=고정비 예산+월식비 예산+Monthly 그 외 지출, net=Monthly 수익−totalExpense입니다. 실제 지급액을 예산 대신 사용하거나 Main 입금을 Monthly 수익으로 합산하지 않습니다. 전체 통장 잔액이 아닙니다.
+- Home asOfDate는 Asia/Seoul 기준 현재 월이면 오늘, 과거 월이면 월말입니다. 해당 월 모든 날짜를 반환하며 미래 날짜에는 free 항목만 생략하고 입력 내역·지급·메모를 표시합니다. 미래 월 home은 FUTURE_MONTH_NOT_ALLOWED입니다.
+- 달력 fixed/지출 금액은 음수, 입금은 양수, free는 부호 있는 여유비입니다. 활성/완료 메모는 금액과 구분한 count로 표시합니다. 홈 expense는 Monthly totalExpense와 같습니다.
+- 월 데이터는 DB에서 날짜/종류/메모 활성 기간별 그룹 합계로 읽어 날짜별 쿼리 반복을 피합니다. Daily 지급 누적액도 항목별 일괄 집계합니다. 조회는 동일한 읽기 전용 트랜잭션에서 수행하며 합계와 중간 계산도 JS 안전 정수 범위를 검증합니다.
+- local Swagger UI의 `summaries` 그룹으로 확인합니다. 별도 DB migration·기존 실행 서버 교체·FE API 연결은 하지 않습니다.
