@@ -41,6 +41,10 @@ class SummaryCalculatorTest {
         assertThat(calculator.daily(month.atDay(12),uniform,Ledger.empty()).remainingFood()).isEqualTo(9*11000);
         assertThat(calculator.daily(month.atDay(22),uniform,Ledger.empty()).remainingFood()).isEqualTo(8*11000);
         assertThat(calculator.daily(month.atDay(12),uniform,Ledger.empty()).freeBalance()).isEqualTo(12*11000);
+        assertThat(calculator.daily(month.atDay(11),uniform,Ledger.empty()).mainBalance()).isEqualTo(11*11000);
+        assertThat(calculator.daily(month.atDay(12),uniform,Ledger.empty()).mainBalance()).isEqualTo(21*11000);
+        assertThat(calculator.daily(month.atDay(21),uniform,Ledger.empty()).mainBalance()).isEqualTo(21*11000);
+        assertThat(calculator.daily(month.atDay(22),uniform,Ledger.empty()).mainBalance()).isEqualTo(30*11000);
     }
     @Test void weekdaySaturdaySundayAndAllMonthLengthsIncludingLeapDayAreRespected() {
         Food food=new Food(11000,15000,10000);
