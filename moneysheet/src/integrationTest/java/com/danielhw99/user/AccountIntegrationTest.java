@@ -97,7 +97,7 @@ class AccountIntegrationTest {
   long id=account();seed(id);var queued=new CountDownLatch(1);
   try(var executor=Executors.newSingleThreadExecutor()){
    final Future<?>[] task=new Future<?>[1];
-   new TransactionTemplate(tm).executeWithoutResult(status->{users.findWithLockingById(id).orElseThrow();task[0]=executor.submit(()->{queued.countDown();return transactions.create(id,YearMonth.of(2026,11),new TransactionInput(LocalDate.of(2026,11,1),LocalTime.NOON,"Late",100L,TransactionDirectionValue.EXPENSE,null));});try{assertThat(queued.await(5,TimeUnit.SECONDS)).isTrue();}catch(InterruptedException e){throw new RuntimeException(e);}accounts.deleteAccount(id,PASSWORD);});
+   new TransactionTemplate(tm).executeWithoutResult(status->{users.findWithLockingById(id).orElseThrow();task[0]=executor.submit(()->{queued.countDown();return transactions.create(id,YearMonth.of(2026,11),new TransactionInput(LocalDate.of(2026,11,1),LocalTime.NOON,"Late",100L,TransactionDirectionValue.EXPENSE,null));});awaitUserLockWait(id);accounts.deleteAccount(id,PASSWORD);});
    assertThatThrownBy(()->task[0].get(20,TimeUnit.SECONDS)).hasCauseInstanceOf(ApiException.class);assertThat(users.findById(id)).isEmpty();
   }
  }
@@ -108,10 +108,21 @@ class AccountIntegrationTest {
    new TransactionTemplate(tm).executeWithoutResult(status->{users.findWithLockingById(id).orElseThrow();task[0]=executor.submit(()->{
     var context=org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();context.setAuthentication(org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(new com.danielhw99.auth.security.AuthPrincipal(id,"old@example.com","Old",0),null,List.of()));org.springframework.security.core.context.SecurityContextHolder.setContext(context);
     try{queued.countDown();return transactions.create(id,YearMonth.of(2026,11),new TransactionInput(LocalDate.of(2026,11,1),LocalTime.NOON,"Late",100L,TransactionDirectionValue.EXPENSE,null));}finally{org.springframework.security.core.context.SecurityContextHolder.clearContext();}
-   });try{assertThat(queued.await(5,TimeUnit.SECONDS)).isTrue();}catch(InterruptedException e){throw new RuntimeException(e);}accounts.changePassword(id,PASSWORD,"a different unique password!");});
+   });awaitUserLockWait(id);accounts.changePassword(id,PASSWORD,"a different unique password!");});
    assertThatThrownBy(()->task[0].get(20,TimeUnit.SECONDS)).hasCauseInstanceOf(ApiException.class);
    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM main_transactions WHERE monthly_budget_id=?",Long.class,budget)).isEqualTo(1);
   }
+ }
+ private void awaitUserLockWait(long owner) {
+  // Observe the actual InnoDB wait using only this ephemeral Testcontainers root account.
+  String sql="SELECT COUNT(*) FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE=w.ENGINE AND l.ENGINE_LOCK_ID=w.BLOCKING_ENGINE_LOCK_ID WHERE l.OBJECT_SCHEMA=? AND l.OBJECT_NAME='users' AND l.INDEX_NAME='PRIMARY' AND l.LOCK_DATA=?";
+  try(var connection=java.sql.DriverManager.getConnection(MYSQL.getJdbcUrl(),"root",MYSQL.getPassword());var statement=connection.prepareStatement(sql)){
+   statement.setString(1,MYSQL.getDatabaseName());statement.setString(2,Long.toString(owner));
+   long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+   while(System.nanoTime()<deadline){try(var rows=statement.executeQuery()){rows.next();if(rows.getLong(1)>0)return;}Thread.sleep(20);}
+   throw new AssertionError("Queued write never waited on the owned user row");
+  }catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new AssertionError("Interrupted while observing user lock wait",interrupted);}
+   catch(java.sql.SQLException failure){throw new AssertionError("Cannot observe isolated MySQL lock wait",failure);}
  }
  @Test void concurrentCategoryReuseStillReturnsOneRow() throws Exception {
   long id=account();var start=new CountDownLatch(1);var input=new CategoryInput("Food",CategoryScopeValue.MAIN_TRANSACTION,CategoryDirectionValue.EXPENSE);
