@@ -76,7 +76,10 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary="로그아웃", description="현재 세션을 무효화합니다. 유효한 CSRF 토큰이 필요합니다.")
     public void logout(HttpServletRequest request,HttpServletResponse response) {
-        new SecurityContextLogoutHandler().logout(request,response,SecurityContextHolder.getContext().getAuthentication());
+        var logout = new SecurityContextLogoutHandler();
+        // Other in-flight requests may hold the session context; retain their principal for version checks.
+        logout.setClearAuthentication(false);
+        logout.logout(request,response,SecurityContextHolder.getContext().getAuthentication());
         response.addHeader(HttpHeaders.SET_COOKIE,ResponseCookie.from("JSESSIONID", "").path("/")
                 .httpOnly(true).secure(secureCookie).sameSite("Lax").maxAge(0).build().toString());
     }

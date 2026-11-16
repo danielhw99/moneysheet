@@ -37,6 +37,8 @@ import org.testcontainers.mysql.MySQLContainer;
 @SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=validate", "spring.flyway.enabled=false"})
 @ContextConfiguration(initializers = CategoryIntegrationTest.Database.class)
 class CategoryIntegrationTest {
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.13")
             .withDatabaseName("moneysheet_category_test")
             .withCreateContainerCmdModifier(command -> command.getHostConfig().withPortBindings(
@@ -95,7 +97,7 @@ class CategoryIntegrationTest {
     }
 
     @Test
-    void staleLookupRecoversFromRealMysqlUniqueViolation() {
+    void unexpectedStaleLookupDoesNotHideIntegrityFailure() {
         Long userId = user("category-stale@example.com");
         var input = new CategoryInput("Rent", CategoryScopeValue.FIXED_BUDGET, null);
         var first = service.createOrReuse(userId, input);
@@ -112,9 +114,10 @@ class CategoryIntegrationTest {
                     }
                 });
 
-        var recovered = new CategoryService(staleLookup, users).createOrReuse(userId, input);
-
-        assertThat(recovered.id()).isEqualTo(first.id());
+        assertThatThrownBy(() -> new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+                .execute(status -> new CategoryService(staleLookup, users).createOrReuse(userId, input)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(service.createOrReuse(userId,input).id()).isEqualTo(first.id());
         assertThat(categories.findByUser_IdOrderByIdAsc(userId)).hasSize(1);
     }
 
@@ -125,10 +128,11 @@ class CategoryIntegrationTest {
                 LocalDateTime.now());
         ReflectionTestUtils.setField(phantom, "id", absentUserId);
         UserRepository fakeUsers = mock(UserRepository.class);
-        when(fakeUsers.findById(absentUserId)).thenReturn(Optional.of(phantom));
+        when(fakeUsers.findWithLockingById(absentUserId)).thenReturn(Optional.of(phantom));
 
-        assertThatThrownBy(() -> new CategoryService(categories, fakeUsers).createOrReuse(absentUserId,
-                new CategoryInput("Ghost", CategoryScopeValue.FIXED_BUDGET, null)))
+        assertThatThrownBy(() -> new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+                .execute(status -> new CategoryService(categories, fakeUsers).createOrReuse(absentUserId,
+                new CategoryInput("Ghost", CategoryScopeValue.FIXED_BUDGET, null))))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(categories.findByUser_IdOrderByIdAsc(absentUserId)).isEmpty();
     }

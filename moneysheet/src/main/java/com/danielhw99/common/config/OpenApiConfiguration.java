@@ -42,7 +42,7 @@ public class OpenApiConfiguration {
 
     @Bean
     public GroupedOpenApi authDocumentation() {
-        return GroupedOpenApi.builder().group("auth").pathsToMatch("/api/v1/auth/**", "/api/v1/me").build();
+        return GroupedOpenApi.builder().group("auth").pathsToMatch("/api/v1/auth/**", "/api/v1/me", "/api/v1/me/**").build();
     }
 
     @Bean

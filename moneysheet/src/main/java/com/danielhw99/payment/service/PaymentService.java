@@ -1,5 +1,7 @@
 package com.danielhw99.payment.service;
 
+import com.danielhw99.auth.security.ActiveAccount;
+
 import java.time.YearMonth;
 import com.danielhw99.payment.api.PaymentInput;
 import com.danielhw99.payment.api.PaymentResponse;
@@ -63,7 +65,7 @@ public class PaymentService {
     private void lockOwner(Long owner) {
         // BudgetService takes this same lock before reads/updates/deletes of a budget item.
         // Reading payment rows only afterwards avoids stale pre-lock snapshots.
-        users.findWithLockingById(owner).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        ActiveAccount.requireCurrent(users.findWithLockingById(owner).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
     }
 
     private FixedBudgetItem target(Long owner, YearMonth month, Long id) {

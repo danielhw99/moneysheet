@@ -21,10 +21,13 @@ import com.danielhw99.common.error.ApiException;
 import com.danielhw99.common.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 class TransactionServiceTest {
+ final com.danielhw99.user.repository.UserRepository users=mock(com.danielhw99.user.repository.UserRepository.class);
+ @org.junit.jupiter.api.BeforeEach void activeOwner(){when(users.findWithLockingById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(Optional.of(mock(User.class)));}
+
     final MainTransactionRepository records = mock(MainTransactionRepository.class);
     final MonthlyBudgetRepository budgets = mock(MonthlyBudgetRepository.class);
     final CategoryRepository categories = mock(CategoryRepository.class);
-    final TransactionService service = new TransactionService(records, budgets, categories);
+    final TransactionService service = new TransactionService(records, budgets, categories,users);
     final YearMonth month = YearMonth.of(2026, 11);
     TransactionInput input(long amount, ApiId category) {
         return new TransactionInput(month.atDay(1), LocalTime.NOON, "점심", amount, TransactionDirectionValue.EXPENSE, category);

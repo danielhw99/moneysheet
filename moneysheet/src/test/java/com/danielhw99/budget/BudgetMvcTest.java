@@ -47,6 +47,15 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 @WebMvcTest(BudgetController.class)
 @Import({SecurityConfiguration.class, SecurityErrorWriter.class, ApiJsonConfiguration.class, TraceIdFilter.class})
 class BudgetMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.user.repository.UserRepository sessionUsers;
+ @org.junit.jupiter.api.BeforeEach void activeSessionUser(){
+  org.mockito.Mockito.when(sessionUsers.findById(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(call->{
+   var user=org.mockito.Mockito.mock(com.danielhw99.user.entity.User.class);
+   org.mockito.Mockito.when(user.getId()).thenReturn(call.getArgument(0));
+   return java.util.Optional.of(user);
+  });
+ }
+
     @Autowired
     MockMvc mvc;
     @MockitoBean

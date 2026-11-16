@@ -133,7 +133,7 @@ class TransactionIntegrationTest {
             assertThat(doc.path("components").path("schemas").has("ApiError")).isTrue();
             var names=doc.path("paths").propertyNames();
             for(String path:names) {
-                if(group.equals("auth")) assertThat(path.startsWith("/api/v1/auth/") || path.equals("/api/v1/me")).isTrue();
+                if(group.equals("auth")) assertThat(path.startsWith("/api/v1/auth/") || path.equals("/api/v1/me") || path.startsWith("/api/v1/me/")).isTrue();
                 if(group.equals("categories")) assertThat(path).isEqualTo("/api/v1/categories");
                 if(group.equals("transactions")) assertThat(path).contains("/transactions");
                 if(group.equals("budgets")) assertThat(path).doesNotContain("/transactions").contains("/api/v1/months/");

@@ -1,5 +1,9 @@
 package com.danielhw99.cashflow.service;
 
+import com.danielhw99.user.repository.UserRepository;
+
+import com.danielhw99.auth.security.ActiveAccount;
+
 import java.time.YearMonth;
 import com.danielhw99.cashflow.api.CashFlowInput;
 import com.danielhw99.cashflow.api.CashFlowResponse;
@@ -19,11 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class CashFlowService {
     private final MonthlyCashFlowRepository records;
     private final MonthlyBudgetRepository budgets;
-    public CashFlowService(MonthlyCashFlowRepository records, MonthlyBudgetRepository budgets) {
+    private final UserRepository users;
+    public CashFlowService(MonthlyCashFlowRepository records, MonthlyBudgetRepository budgets, UserRepository users) {
+        this.users=users;
         this.records = records; this.budgets = budgets;
     }
     @Transactional
     public CashFlowResponse create(Long owner, YearMonth month, CashFlowInput input) {
+        lockOwner(owner);
         MonthlyBudget budget = readyBudget(owner, month);
         validate(month, input);
         return response(records.saveAndFlush(new MonthlyCashFlow(budget, input.date(), input.time(),
@@ -33,6 +40,7 @@ public class CashFlowService {
     public CashFlowResponse get(Long owner, YearMonth month, Long id) { return response(owned(owner, month, id)); }
     @Transactional
     public CashFlowResponse update(Long owner, YearMonth month, Long id, CashFlowInput input) {
+        lockOwner(owner);
         MonthlyCashFlow record = owned(owner, month, id);
         validate(month, input);
         if (record.getKind() != input.kind().entityValue()) throw new ApiException(ErrorCode.VALIDATION);
@@ -40,7 +48,12 @@ public class CashFlowService {
         return response(record);
     }
     @Transactional
-    public void delete(Long owner, YearMonth month, Long id) { records.delete(owned(owner, month, id)); }
+    public void delete(Long owner, YearMonth month, Long id) {
+        lockOwner(owner); records.delete(owned(owner, month, id)); }
+    private void lockOwner(Long owner) {
+        ActiveAccount.requireCurrent(users.findWithLockingById(owner)
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
+    }
     private MonthlyBudget readyBudget(Long owner, YearMonth month) {
         MonthlyBudget budget = budgets.findByUser_IdAndMonthStart(owner, month.atDay(1))
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));

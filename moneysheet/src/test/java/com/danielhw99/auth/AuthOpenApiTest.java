@@ -26,4 +26,12 @@ class AuthOpenApiTest {
    assertThat(path.getGet().getSecurity().getFirst()).containsOnlyKeys("sessionCookie");
   }
  }
+ @Test void accountWritesDeclareSessionAndCsrfTogether(){
+  var api=new OpenApiConfiguration().moneySheetOpenApi()
+   .path("/api/v1/me",new PathItem().patch(new Operation()))
+   .path("/api/v1/me/password",new PathItem().put(new Operation()))
+   .path("/api/v1/me/deletion",new PathItem().post(new Operation()));
+  new AuthOpenApiConfiguration().sessionAndCsrfDocumentation().customise(api);
+  api.getPaths().values().forEach(path->path.readOperations().forEach(operation->{assertThat(operation.getSecurity().getFirst()).containsOnlyKeys("sessionCookie","csrfToken");assertThat(operation.getParameters()).anyMatch(parameter->parameter.getName().equals("X-CSRF-TOKEN") && Boolean.TRUE.equals(parameter.getRequired()));}));
+ }
 }

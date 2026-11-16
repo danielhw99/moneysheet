@@ -30,6 +30,13 @@ public class User extends BaseEntity {
     @Column(name = "privacy_agreed_at", nullable = false, columnDefinition = "datetime(6)")
     private LocalDateTime privacyAgreedDate;
 
+    @Column(name = "session_version", nullable = false)
+    private long sessionVersion;
+
+    public long getSessionVersion() { return sessionVersion; }
+    public void rename(String nickname) { this.nickname = nickname; }
+    public void changePassword(String hash) { passwordHash = hash; sessionVersion = Math.incrementExact(sessionVersion); }
+
     protected User() {
     }
 

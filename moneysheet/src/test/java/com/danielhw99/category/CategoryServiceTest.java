@@ -28,6 +28,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class CategoryServiceTest {
+    @org.junit.jupiter.api.BeforeEach void activeOwner(){when(users.findWithLockingById(7L)).thenReturn(Optional.of(mock(User.class)));}
+
     private final CategoryRepository categories = mock(CategoryRepository.class);
     private final UserRepository users = mock(UserRepository.class);
     private final CategoryService service = new CategoryService(categories, users);
@@ -68,7 +70,7 @@ class CategoryServiceTest {
     @Test
     void createsNormalizedCategoryForAuthenticatedUser() {
         User owner = category(1L, CategoryScope.FIXED_BUDGET, CategoryDirection.NONE, "x").getUser();
-        when(users.findById(7L)).thenReturn(Optional.of(owner));
+        when(users.findWithLockingById(7L)).thenReturn(Optional.of(owner));
         when(categories.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class))).thenAnswer(invocation -> {
             Category created = invocation.getArgument(0);
             ReflectionTestUtils.setField(created, "id", 103L);
@@ -118,28 +120,20 @@ class CategoryServiceTest {
     }
 
     @Test
-    void recoversOnlyNamedDuplicateAfterFailedInsert() {
-        Category existing = category(105L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "Salary");
-        when(users.findById(7L)).thenReturn(Optional.of(existing.getUser()));
-        when(categories.findByUser_IdAndScopeAndDirectionAndNameKey(7L,
-                CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "salary"))
-                .thenReturn(Optional.empty(), Optional.of(existing));
-        when(categories.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class)))
-                .thenThrow(new DataIntegrityViolationException("duplicate",
-                        new SQLException("Duplicate entry for key 'uq_categories_name'", "23000", 1062)));
-
-        var result = service.createOrReuse(7L,
-                new CategoryInput(" Salary ", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.INCOME));
-
-        assertThat(result.id().jsonValue()).isEqualTo("105");
-        verify(categories, org.mockito.Mockito.times(2)).findByUser_IdAndScopeAndDirectionAndNameKey(
-                7L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "salary");
+    void locksOwnerBeforeDuplicateReuseLookup() {
+        var existing=category(105L,CategoryScope.MAIN_TRANSACTION,CategoryDirection.INCOME,"Salary");
+        when(categories.findByUser_IdAndScopeAndDirectionAndNameKey(7L,CategoryScope.MAIN_TRANSACTION,CategoryDirection.INCOME,"salary")).thenReturn(Optional.of(existing));
+        assertThat(service.createOrReuse(7L,new CategoryInput("Salary",CategoryScopeValue.MAIN_TRANSACTION,CategoryDirectionValue.INCOME)).id().jsonValue()).isEqualTo("105");
+        var order=org.mockito.Mockito.inOrder(users,categories);
+        order.verify(users).findWithLockingById(7L);
+        order.verify(categories).findByUser_IdAndScopeAndDirectionAndNameKey(7L,CategoryScope.MAIN_TRANSACTION,CategoryDirection.INCOME,"salary");
+        verify(categories,org.mockito.Mockito.never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
     void unrelatedIntegrityErrorIsNotHidden() {
         Category sample = category(105L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "Salary");
-        when(users.findById(7L)).thenReturn(Optional.of(sample.getUser()));
+        when(users.findWithLockingById(7L)).thenReturn(Optional.of(sample.getUser()));
         DataIntegrityViolationException failure = new DataIntegrityViolationException("foreign key",
                 new SQLException("Cannot add or update child row", "23000", 1452));
         when(categories.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class))).thenThrow(failure);
@@ -151,7 +145,7 @@ class CategoryServiceTest {
     @Test
     void unrelatedDuplicateKeyIsNotHidden() {
         Category sample = category(105L, CategoryScope.MAIN_TRANSACTION, CategoryDirection.INCOME, "Salary");
-        when(users.findById(7L)).thenReturn(Optional.of(sample.getUser()));
+        when(users.findWithLockingById(7L)).thenReturn(Optional.of(sample.getUser()));
         DataIntegrityViolationException failure = new DataIntegrityViolationException("other unique key",
                 new SQLException("Duplicate entry for key 'uq_other'", "23000", 1062));
         when(categories.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class))).thenThrow(failure);
