@@ -30,13 +30,13 @@ public class SummaryCalculator {
             // Validate the raw running aggregate even when food would offset it.
             cumulativeExpense=add(cumulativeExpense,expense);
             cumulativeIncome=add(cumulativeIncome,income);
-            available=add(carry,todayFood);free=add(available,-expense);
+            available=add(carry,todayFood);free=add(add(available,-expense),income);
         }
         int end=date.getDayOfMonth()<=11?11:date.getDayOfMonth()<=21?21:month.lengthOfMonth();
         long remaining=0;
         for(int day=date.getDayOfMonth()+1;day<=end;day++) remaining=add(remaining,foodForDate(month.atDay(day),food));
         MemoState memos=memos(date,ledger);
-        long main=add(add(add(free,remaining),cumulativeIncome),memos.adjustment());
+        long main=add(add(free,remaining),memos.adjustment());
         return new Day(carry,available,free,todayFood,remaining,expense,income,main,memos.active(),memos.completed());
     }
 

@@ -138,7 +138,7 @@ class SummaryIntegrationTest {
     PaymentInput payment(int day,long amount,Long item) { return new PaymentInput(month.atDay(day),LocalTime.NOON,"Payment",amount,new ApiId(item)); }
     void code(ErrorCode expected,Runnable call) { assertThatThrownBy(call::run).isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(expected); }
 
-    @Test void dailyCombinesRealRecordsWithoutChangingFreeBalanceOrIncludingFuturePayments() {
+    @Test void dailyIncludesGeneralIncomeInFreeBalanceOnceAndExcludesFuturePayments() {
         User owner=user();var budget=ready(owner);var item=item(owner,budget,100000);
         transactions.create(owner.getId(),month,transaction(1,9000,TransactionDirectionValue.EXPENSE));
         transactions.create(owner.getId(),month,transaction(1,50000,TransactionDirectionValue.INCOME));
@@ -147,9 +147,9 @@ class SummaryIntegrationTest {
         var out=memos.create(owner.getId(),month,memo(2,45000,MemoDirectionValue.EXPENSE));
         var in=memos.create(owner.getId(),month,memo(2,50000,MemoDirectionValue.INCOME));
         var pending=memos.create(owner.getId(),month,memo(2,14900,MemoDirectionValue.EXPENSE));
-        var first=service.daily(owner.getId(),month.atDay(1));assertThat(first.carryoverFreeBalance()).isZero();assertThat(first.freeBalance()).isEqualTo(2000);
+        var first=service.daily(owner.getId(),month.atDay(1));assertThat(first.carryoverFreeBalance()).isZero();assertThat(first.freeBalance()).isEqualTo(52000);
         var daily=service.daily(owner.getId(),month.atDay(2));
-        assertThat(daily.carryoverFreeBalance()).isEqualTo(2000);assertThat(daily.freeBalance()).isEqualTo(-9000);assertThat(daily.remainingFood()).isEqualTo(99000);assertThat(daily.mainBalance()).isEqualTo(130100);
+        assertThat(daily.carryoverFreeBalance()).isEqualTo(52000);assertThat(daily.freeBalance()).isEqualTo(41000);assertThat(daily.remainingFood()).isEqualTo(99000);assertThat(daily.mainBalance()).isEqualTo(130100);
         assertThat(daily.expenseTotal()).isEqualTo(22000);assertThat(daily.incomeTotal()).isZero();assertThat(daily.transactions()).hasSize(1);assertThat(daily.activeMemos()).hasSize(3);
         assertThat(daily.payments()).hasSize(1);assertThat(daily.payments().getFirst().paid()).isEqualTo(60000);assertThat(daily.payments().getFirst().remaining()).isEqualTo(40000);assertThat(daily.payments().getFirst().complete()).isFalse();
         for(var value:List.of(out,in,pending)) memos.complete(owner.getId(),month,value.id().value(),month.atDay(4));

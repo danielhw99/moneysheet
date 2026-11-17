@@ -22,19 +22,19 @@ class SummaryCalculatorTest {
     final Food uniform=new Food(11000,11000,11000);
     final YearMonth month=YearMonth.of(2026,11);
     BigDecimal amount(long value) { return BigDecimal.valueOf(value); }
-    @Test void firstDayStartsAtZeroAndFoodSavingsBelongToTheSameDay() {
+    @Test void firstDayStartsAtZeroAndDailyIncomeBelongsToTheSameDayFreeBalance() {
         var date=month.atDay(1);var facts=new Ledger(Map.of(date,new Amounts(amount(9000),amount(50000))),Map.of(date,amount(100000)),List.of());
         var day=calculator.daily(date,uniform,facts);
         assertThat(day.carryoverFreeBalance()).isZero();assertThat(day.availableBeforeSpending()).isEqualTo(11000);
-        assertThat(day.freeBalance()).isEqualTo(2000);assertThat(day.remainingFood()).isEqualTo(110000);
+        assertThat(day.freeBalance()).isEqualTo(52000);assertThat(day.remainingFood()).isEqualTo(110000);
         assertThat(day.mainBalance()).isEqualTo(162000);assertThat(day.incomeTotal()).isEqualTo(50000);
     }
-    @Test void nextDayCarriesOnlySameMonthFreeBalanceAndMainIncomeIsCumulative() {
+    @Test void nextDayCarriesSameMonthFreeBalanceIncludingDailyIncomeWithoutDuplicatingItInMain() {
         var facts=new Ledger(Map.of(month.atDay(1),new Amounts(amount(9000),amount(50000)),month.atDay(2),new Amounts(amount(22000),amount(2000)),month.minusMonths(1).atEndOfMonth(),new Amounts(amount(999999),amount(999999))),Map.of(),List.of());
         var day=calculator.daily(month.atDay(2),uniform,facts);
-        assertThat(day.carryoverFreeBalance()).isEqualTo(2000);assertThat(day.freeBalance()).isEqualTo(-9000);
+        assertThat(day.carryoverFreeBalance()).isEqualTo(52000);assertThat(day.freeBalance()).isEqualTo(43000);
         assertThat(day.expenseTotal()).isEqualTo(22000);assertThat(day.incomeTotal()).isEqualTo(2000);
-        assertThat(day.mainBalance()).isEqualTo(-9000+99000+52000);
+        assertThat(day.mainBalance()).isEqualTo(43000+99000);
     }
     @Test void installmentEndsAndNewInstallmentsHaveNoDuplicateAllocation() {
         for(int value:new int[]{11,21,month.lengthOfMonth()}) assertThat(calculator.daily(month.atDay(value),uniform,Ledger.empty()).remainingFood()).isZero();
@@ -77,7 +77,7 @@ class SummaryCalculatorTest {
         for(String value:List.of("9007199254740992","0.5","-1")) code(()->calculator.positive(new BigDecimal(value)));
         assertThat(calculator.positive(new BigDecimal("9007199254740991"))).isEqualTo(9_007_199_254_740_991L);
         code(()->calculator.monthly(month,uniform,new BigDecimal("9007199254740991"),BigDecimal.ZERO,BigDecimal.ZERO));
-        var overflow=new Ledger(Map.of(month.atDay(1),new Amounts(BigDecimal.ZERO,new BigDecimal("9007199254740991")),month.atDay(2),new Amounts(BigDecimal.ZERO,BigDecimal.ONE)),Map.of(),List.of());
+        var overflow=new Ledger(Map.of(month.atDay(1),new Amounts(amount(200000),new BigDecimal("9007199254740991")),month.atDay(2),new Amounts(BigDecimal.ZERO,BigDecimal.ONE)),Map.of(),List.of());
         code(()->calculator.daily(month.atDay(2),uniform,overflow));
     }
     @Test void futureSpendingAndIncomeDoNotChangeHistoricalDailyValues() {
