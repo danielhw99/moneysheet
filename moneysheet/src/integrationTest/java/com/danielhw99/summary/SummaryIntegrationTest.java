@@ -109,6 +109,32 @@ class SummaryIntegrationTest {
         @Bean @Primary Clock summaryClock() { return Clock.fixed(Instant.parse("2026-11-15T16:00:00Z"),ZoneOffset.UTC); }
     }
     @Autowired SummaryService service;
+    @Autowired com.danielhw99.balance.service.DailyBalanceCheckService balanceChecks;
+    @Test void actualBalanceHttpUsesSessionCsrfAndStrictValidation() throws Exception {
+        User owner=user(); var session=session(owner); String path="/api/v1/daily-balance-checks/2026-11-02";
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(put(path).session(session).contentType("application/json").content("{\"actualBalance\":0,\"locked\":true}")).andExpect(status().isForbidden());
+        mvc.perform(put(path).session(session).with(SecurityMockMvcRequestPostProcessors.csrf()).contentType("application/json").content("{\"actualBalance\":0,\"locked\":true}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.actualBalance").value(0));
+        mvc.perform(get(path).session(session)).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store")).andExpect(jsonPath("$.locked").value(true));
+        for(String input:List.of("{\"actualBalance\":-1,\"locked\":true}","{\"actualBalance\":1,\"locked\":null}","{\"actualBalance\":1.5,\"locked\":true}"))
+            mvc.perform(put(path).session(session).with(SecurityMockMvcRequestPostProcessors.csrf()).contentType("application/json").content(input)).andExpect(status().isBadRequest());
+    }
+    @Test void actualBalancePersistsPerOwnerAndDateWithoutChangingSummary() {
+        User owner=user(); ready(owner); User other=user();
+        var day=month.atDay(2); var before=service.daily(owner.getId(),day);
+        balanceChecks.save(owner.getId(),day,0L,true);
+        assertThat(balanceChecks.get(owner.getId(),day).actualBalance()).isZero();
+        assertThat(balanceChecks.get(other.getId(),day).actualBalance()).isNull();
+        assertThat(balanceChecks.get(owner.getId(),day.plusDays(1)).actualBalance()).isNull();
+        balanceChecks.save(owner.getId(),day,9999999999L,false);
+        assertThat(service.daily(owner.getId(),day)).isEqualTo(before);
+        assertThat(balanceChecks.get(owner.getId(),day).locked()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM daily_balance_checks WHERE user_id=? AND balance_date=?",Long.class,owner.getId(),day)).isEqualTo(1);
+        balanceChecks.save(owner.getId(),day,null,true);
+        assertThat(balanceChecks.get(owner.getId(),day).actualBalance()).isNull();
+        assertThat(service.daily(owner.getId(),day)).isEqualTo(before);
+    }
     @Autowired TransactionService transactions;
     @Autowired MemoService memos;
     @Autowired PaymentService payments;

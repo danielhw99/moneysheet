@@ -80,7 +80,9 @@ class AccountIntegrationTest {
  }
  @Test void deletionRemovesAllOwnDataAndKeepsOtherUserAndSessions() throws Exception {
   long id=account(),other=account();long budget=seed(id),otherBudget=seed(other);var a=login(id,PASSWORD);var b=login(id,PASSWORD);var theirs=login(other,PASSWORD);
+  jdbc.update("INSERT INTO daily_balance_checks(user_id,balance_date,actual_balance,locked,created_at,updated_at) VALUES (?, '2026-11-01', 100, 1, NOW(), NOW())",id);
   mvc.perform(post("/api/v1/me/deletion").session(a).with(csrf()).contentType("application/json").content("{\"currentPassword\":\""+PASSWORD+"\"}")).andExpect(status().isNoContent());
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM daily_balance_checks WHERE user_id=?",Long.class,id)).isZero();
   assertThat(users.findById(id)).isEmpty();assertThat(a.isInvalid()).isTrue();mvc.perform(get("/api/v1/me").session(b)).andExpect(status().isUnauthorized());mvc.perform(get("/api/v1/me").session(theirs)).andExpect(status().isOk());
   for(String table:new String[]{"main_transactions","money_memos","monthly_cash_flows","fixed_budget_items"}){
    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" WHERE monthly_budget_id=?",Long.class,budget)).isZero();
