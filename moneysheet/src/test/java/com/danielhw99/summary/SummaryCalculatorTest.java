@@ -77,7 +77,7 @@ class SummaryCalculatorTest {
         for(String value:List.of("9007199254740992","0.5","-1")) code(()->calculator.positive(new BigDecimal(value)));
         assertThat(calculator.positive(new BigDecimal("9007199254740991"))).isEqualTo(9_007_199_254_740_991L);
         code(()->calculator.monthly(month,uniform,new BigDecimal("9007199254740991"),BigDecimal.ZERO,BigDecimal.ZERO));
-        var overflow=new Ledger(Map.of(month.atDay(1),new Amounts(BigDecimal.ZERO,new BigDecimal("9007199254740991")),month.atDay(2),new Amounts(BigDecimal.ZERO,BigDecimal.ONE)),Map.of(),List.of());
+        var overflow=new Ledger(Map.of(month.atDay(1),new Amounts(amount(200000),new BigDecimal("9007199254740991")),month.atDay(2),new Amounts(BigDecimal.ZERO,BigDecimal.ONE)),Map.of(),List.of());
         code(()->calculator.daily(month.atDay(2),uniform,overflow));
     }
     @Test void futureSpendingAndIncomeDoNotChangeHistoricalDailyValues() {
