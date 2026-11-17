@@ -68,7 +68,7 @@ class BudgetIntegrationTest {
             } catch (java.sql.SQLException error) { throw new IllegalStateException("Cannot seed legacy migration fixture", error); }
             var flyway = Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                     .cleanDisabled(true).createSchemas(false).baselineOnMigrate(false).load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(2);
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(3);
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             flyway.validate();
             TestPropertyValues.of("spring.datasource.url=" + MYSQL.getJdbcUrl(),

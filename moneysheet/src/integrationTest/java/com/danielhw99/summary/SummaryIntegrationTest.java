@@ -128,6 +128,7 @@ class SummaryIntegrationTest {
         assertThat(balanceChecks.get(other.getId(),day).actualBalance()).isNull();
         assertThat(balanceChecks.get(owner.getId(),day.plusDays(1)).actualBalance()).isNull();
         balanceChecks.save(owner.getId(),day,9999999999L,false);
+        assertThat(service.daily(owner.getId(),day)).isEqualTo(before);
         assertThat(balanceChecks.get(owner.getId(),day).locked()).isFalse();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM daily_balance_checks WHERE user_id=? AND balance_date=?",Long.class,owner.getId(),day)).isEqualTo(1);
         balanceChecks.save(owner.getId(),day,null,true);
