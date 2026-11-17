@@ -87,6 +87,11 @@ public class OpenApiConfiguration {
     }
 
     @Bean
+    public GroupedOpenApi balanceCheckDocumentation() {
+        return GroupedOpenApi.builder().group("balance-checks").pathsToMatch("/api/v1/daily-balance-checks/**").build();
+    }
+
+    @Bean
     public PropertyCustomizer temporalApiSchemas() {
         return (schema, type) -> {
             if (type.getType() == null) {

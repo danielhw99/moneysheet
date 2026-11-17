@@ -44,6 +44,7 @@ public class AccountService {
   delete("DELETE p FROM fixed_payments p JOIN fixed_budget_items i ON i.id=p.fixed_budget_item_id JOIN monthly_budgets b ON b.id=i.monthly_budget_id WHERE b.user_id=:owner",id);
   for(String table:new String[]{"main_transactions","money_memos","monthly_cash_flows","fixed_budget_items"})
    delete("DELETE c FROM "+table+" c JOIN monthly_budgets b ON b.id=c.monthly_budget_id WHERE b.user_id=:owner",id);
+  delete("DELETE FROM daily_balance_checks WHERE user_id=:owner",id);
   delete("DELETE FROM monthly_budgets WHERE user_id=:owner",id);
   delete("DELETE FROM categories WHERE user_id=:owner",id);
   em.remove(user);em.flush();
