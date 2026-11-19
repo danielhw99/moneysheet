@@ -68,7 +68,7 @@ class BudgetIntegrationTest {
             } catch (java.sql.SQLException error) { throw new IllegalStateException("Cannot seed legacy migration fixture", error); }
             var flyway = Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                     .cleanDisabled(true).createSchemas(false).baselineOnMigrate(false).load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(3);
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(4);
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             flyway.validate();
             TestPropertyValues.of("spring.datasource.url=" + MYSQL.getJdbcUrl(),
@@ -210,6 +210,21 @@ class BudgetIntegrationTest {
         assertThat(summary.items().get(0).complete()).isFalse();
         service.createItem(owner.getId(), month, new ItemInput("Other", new ApiId(category.getId()), 2L));
         assertThat(service.get(owner.getId(), month).items()).hasSize(2);
+    }
+
+    @Test void uncategorizedBudgetCanBeCreatedEditedAndCompleted() {
+        var owner = user();
+        var month = month();
+        service.prepare(owner.getId(), month);
+        var ready = service.setup(owner.getId(), month, new SetupInput(
+                List.of(new SetupItem(null, "미분류", null, 100L)), new Food(10L, 20L, 30L)));
+        var item = ready.items().getFirst();
+        assertThat(item.categoryId()).isNull();
+        assertThat(service.get(owner.getId(), month).fixedTotal()).isEqualTo(100L);
+        assertThat(service.updateItem(owner.getId(), month, item.id().value(),
+                new ItemInput("수정", null, 200L)).categoryId()).isNull();
+        assertThat(service.createItem(owner.getId(), month, new ItemInput("추가", null, 50L)).categoryId()).isNull();
+        assertThat(service.get(owner.getId(), month).fixedTotal()).isEqualTo(250L);
     }
 
     private void assertCode(ErrorCode code, Runnable operation) {

@@ -69,4 +69,9 @@ public class Category extends BaseEntity {
     public String getNameKey() {
         return nameKey;
     }
+
+    public void rename(String name, String nameKey) {
+        this.name = name;
+        this.nameKey = nameKey;
+    }
 }

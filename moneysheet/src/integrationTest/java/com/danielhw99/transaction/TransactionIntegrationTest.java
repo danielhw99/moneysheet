@@ -134,11 +134,18 @@ class TransactionIntegrationTest {
             var names=doc.path("paths").propertyNames();
             for(String path:names) {
                 if(group.equals("auth")) assertThat(path.startsWith("/api/v1/auth/") || path.equals("/api/v1/me") || path.startsWith("/api/v1/me/")).isTrue();
-                if(group.equals("categories")) assertThat(path).isEqualTo("/api/v1/categories");
+                if(group.equals("categories")) assertThat(path).isIn("/api/v1/categories", "/api/v1/categories/{id}");
                 if(group.equals("transactions")) assertThat(path).contains("/transactions");
                 if(group.equals("budgets")) assertThat(path).doesNotContain("/transactions").contains("/api/v1/months/");
             }
             if(group.equals("auth")) assertThat(doc.path("paths").path("/api/v1/auth/csrf").path("get").path("parameters").size()).isZero();
+            if(group.equals("categories")) {
+                for(String method:List.of("patch","delete")) {
+                    var operation=doc.path("paths").path("/api/v1/categories/{id}").path(method);
+                    assertThat(operation.path("security").toString()).contains("sessionCookie","csrfToken");
+                    assertThat(operation.path("parameters").toString()).contains("X-CSRF-TOKEN");
+                }
+            }
             if(group.equals("transactions")) {
                 var post=doc.path("paths").path("/api/v1/months/{month}/transactions").path("post");
                 assertThat(post.path("security").toString()).contains("sessionCookie","csrfToken");

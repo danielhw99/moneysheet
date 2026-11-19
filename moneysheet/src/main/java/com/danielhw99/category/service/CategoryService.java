@@ -72,6 +72,50 @@ public class CategoryService {
                 owner, input.scope().entityValue(), direction, name, nameKey)));
     }
 
+    @Transactional
+    public CategoryResponse update(Long userId, Long id, String rawName) {
+        lockOwner(userId);
+        Category current = owned(userId, id);
+        String name = validatedName(rawName);
+        String key = name.toLowerCase(Locale.ROOT);
+        var duplicate = categories.findByUser_IdAndScopeAndDirectionAndNameKey(
+                userId, current.getScope(), current.getDirection(), key);
+        if (duplicate.isPresent() && !duplicate.get().getId().equals(id)) {
+            throw new ApiException(ErrorCode.CONFLICT, "name", "이미 사용 중인 이름입니다.");
+        }
+        current.rename(name, key);
+        categories.flush();
+        return CategoryResponse.from(current);
+    }
+
+    @Transactional
+    public void delete(Long userId, Long id) {
+        lockOwner(userId);
+        categories.delete(owned(userId, id));
+        // V5 SET NULL preserves referencing rows; all app writes share the owner lock.
+        categories.flush();
+    }
+
+    private void lockOwner(Long userId) {
+        ActiveAccount.requireCurrent(users.findWithLockingById(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED)));
+    }
+
+    private Category owned(Long userId, Long id) {
+        if (id == null || id < 1) throw new ApiException(ErrorCode.VALIDATION);
+        return categories.findById(id).filter(value -> value.getUser().getId().equals(userId))
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+    }
+
+    private String validatedName(String raw) {
+        if (raw == null) throw new ApiException(ErrorCode.VALIDATION);
+        String name = stripUnicodeSpace(raw);
+        String key = name.toLowerCase(Locale.ROOT);
+        if (name.isBlank() || name.codePointCount(0, name.length()) > 100
+                || key.codePointCount(0, key.length()) > 100) throw new ApiException(ErrorCode.VALIDATION);
+        return name;
+    }
+
     private String stripUnicodeSpace(String value) {
         int start = 0;
         int end = value.length();

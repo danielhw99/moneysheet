@@ -1,5 +1,17 @@
 # MoneySheet Backend App
 
+## UR07 카테고리 관리 (#39)
+
+- 카테고리 `PATCH /api/v1/categories/{id}`는 name만 받고200 Category를 반환합니다. 같은 사용자/영역/방향의 다른 항목과 중복이면409 CONFLICT와 name 필드 오류이며 자동 병합하지 않습니다.
+- `DELETE /api/v1/categories/{id}`는204·본문 없음, 미존재/타인/재삭제는404입니다. 참조 예산·거래·지급은 삭제하지 않고 카테고리 참조만 미분류로 바꿉니다.
+- 고정비 categoryId는 null/생략으로 생성·수정·완료할 수 있고 조회/전달 복사도 null을 보존합니다. 내역의 미분류도 유지합니다.
+- **V5__category_management.sql**은 고정비 category_id nullable와 두 카테고리 FK SET NULL을 적용합니다. 기존 V1~V4는 수정하지 않습니다. 같은 ALTER에서 FK 이름 충돌을 피하도록 교체 제약 이름을 구분합니다.
+- 일반 bootRun은 migration을 실행하지 않습니다. 실제 개발 DB에는 자동 적용하지 않았습니다. 기존 FE는 nullable 응답을 처리하지 못할 수 있으므로 FE #41과 함께 준비하고 대상 DB 확인·백업·명시 승인 후 dbInfo→dbMigrate→dbValidate를 수행합니다.
+- local Swagger의 categories 그룹에 조회/생성/수정/삭제와 세션/CSRF를 표시합니다. 동시 쓰기는 기존 사용자 행 잠금을 공유하며 과거 예산 금액 편집 제한과 공통 카테고리 이름/참조 변경은 구분합니다.
+- Windows: `gradlew.bat test compileIntegrationTestJava bootJar --no-daemon --console=plain`. Docker 환경: `bash ./gradlew check bootJar --no-daemon --console=plain`. 통합 테스트는 임시 MySQL이며 기존 개발 DB를 사용하지 않습니다.
+
+아래 개별 이슈의 ‘미구현·적용 전’ 문구와 테스트 개수는 당시 이력이며 UR07 현재 구조와 구분합니다.
+
 ## Category API (Issue #14, WBS 3.1)
 
 `GET /api/v1/categories` returns the authenticated user's categories as `{ "items": [...] }`.

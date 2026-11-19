@@ -82,7 +82,7 @@ public class BudgetService {
         List<DraftItem> draftItems = new ArrayList<>();
         for (var item : items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())) {
             draftItems.add(new DraftItem(new ApiId(item.getId()), item.getName(),
-                    new ApiId(item.getCategory().getId()), item.getAmount()));
+                    categoryId(item), item.getAmount()));
         }
         return new Preparation(ApiFormats.formatMonth(month), budget.getSetupStatus() == BudgetSetupStatus.READY ? "ready" : "draft",
                 source, draftItems, new Food(budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday()));
@@ -147,7 +147,7 @@ public class BudgetService {
             if (paid > item.getAmount()) throw new ApiException(ErrorCode.AMOUNT_RANGE_EXCEEDED);
             fixedTotal = calendar.safeAdd(fixedTotal, item.getAmount());
             result.add(new ItemSummary(new ApiId(item.getId()), item.getName(),
-                    new ApiId(item.getCategory().getId()), item.getAmount(), paid,
+                    categoryId(item), item.getAmount(), paid,
                     item.getAmount() - paid, paid == item.getAmount()));
         }
         Food food = new Food(budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday());
@@ -167,7 +167,7 @@ public class BudgetService {
     }
 
     private void validateItem(String name, ApiId categoryId, Long amount) {
-        if (categoryId == null || !validAmount(amount) || name == null
+        if (!validAmount(amount) || name == null
                 || name.strip().isEmpty() || name.strip().codePointCount(0, name.strip().length()) > 100)
             throw new ApiException(ErrorCode.VALIDATION);
     }
@@ -175,6 +175,7 @@ public class BudgetService {
     private boolean validAmount(Long amount) { return amount != null && amount >= 1 && amount <= 9_999_999_999L; }
 
     private Category fixedCategory(Long userId, ApiId categoryId) {
+        if (categoryId == null) return null;
         return categories.findById(categoryId.value())
                 .filter(c -> c.getUser().getId().equals(userId) && c.getScope() == CategoryScope.FIXED_BUDGET)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
@@ -243,6 +244,10 @@ public class BudgetService {
 
     private Item itemResponse(FixedBudgetItem item) {
         return new Item(new ApiId(item.getId()), item.getName(),
-                new ApiId(item.getCategory().getId()), item.getAmount());
+                categoryId(item), item.getAmount());
+    }
+
+    private ApiId categoryId(FixedBudgetItem item) {
+        return item.getCategory() == null ? null : new ApiId(item.getCategory().getId());
     }
 }

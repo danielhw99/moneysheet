@@ -19,8 +19,8 @@ public class FixedBudgetItem extends BaseEntity {
     @JoinColumn(name = "monthly_budget_id", nullable = false)
     private MonthlyBudget monthlyBudget;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "category_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
     private Category category;
 
     @Column(name = "name", nullable = false, length = 100)
