@@ -11,6 +11,26 @@ import io.swagger.v3.oas.models.Paths;
 import org.junit.jupiter.api.Test;
 
 class CategoryOpenApiTest {
+    @Test void categoryDeleteDeclares204ForSwagger() throws Exception {
+        var method = com.danielhw99.category.api.CategoryController.class.getMethod("delete",
+                com.danielhw99.auth.security.AuthPrincipal.class, String.class);
+        var status = method.getAnnotation(org.springframework.web.bind.annotation.ResponseStatus.class);
+        assertThat(status).isNotNull();
+        assertThat(status.value()).isEqualTo(org.springframework.http.HttpStatus.NO_CONTENT);
+    }
+    @Test void categoryManagementDocumentsSessionAndCsrfForBothWrites() {
+        var patch = new Operation();
+        var delete = new Operation();
+        var api = new OpenAPI().components(new Components()).paths(new Paths()
+                .addPathItem("/api/v1/categories/{id}", new PathItem().patch(patch).delete(delete)));
+        new AuthOpenApiConfiguration().sessionAndCsrfDocumentation().customise(api);
+        for (var operation : java.util.List.of(patch, delete)) {
+            assertThat(operation.getSecurity()).anySatisfy(requirement ->
+                    assertThat(requirement).containsKeys("sessionCookie", "csrfToken"));
+            assertThat(operation.getParameters()).anySatisfy(parameter ->
+                    assertThat(parameter.getName()).isEqualTo("X-CSRF-TOKEN"));
+        }
+    }
     @Test
     void categoryOperationsDocumentSessionAndPostCsrfHeader() {
         var get = new Operation();

@@ -133,6 +133,43 @@ class CategoryMvcTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test void renameAndDeleteUseAuthenticatedNoStoreResponses() throws Exception {
+        when(categories.update(7L, 101L, "New")).thenReturn(new CategoryResponse(
+                new ApiId(101L), "New", CategoryScopeValue.FIXED_BUDGET, null));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/categories/101")
+                .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"New\"}"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.id").value("101"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/categories/101")
+                .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf()))
+                .andExpect(status().isNoContent())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+    }
+
+    @Test void duplicateRenameHasConflictNameFieldWithoutLeakingInput() throws Exception {
+        when(categories.update(7L, 101L, "Rent")).thenThrow(new com.danielhw99.common.error.ApiException(
+                com.danielhw99.common.error.ErrorCode.CONFLICT, "name", "이미 사용 중인 이름입니다."));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/categories/101")
+                .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Rent\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONFLICT"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("name"));
+    }
+
+    @Test void managementWritesRejectScopeChangesInvalidIdsAndMissingCsrf() throws Exception {
+        for (String body : List.of("{}", "{\"name\":null}", "{\"name\":\"x\",\"scope\":\"fixedBudget\"}")) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/categories/101")
+                    .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/categories/101")
+                .session(session(7L)).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"x\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/categories/nope")
+                .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())).andExpect(status().isBadRequest());
+    }
+
     private MockHttpSession session(Long userId) {
         var principal = new AuthPrincipal(userId, "user@example.com", "User");
         var context = SecurityContextHolder.createEmptyContext();

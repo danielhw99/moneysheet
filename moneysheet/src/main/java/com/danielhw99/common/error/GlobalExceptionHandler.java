@@ -49,7 +49,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             headers.set(HttpHeaders.RETRY_AFTER, exception.getRetryAfterSeconds().toString());
         }
         return errorResponse(exception.getErrorCode(), exception.getErrorCode().getStatus(), headers,
-                List.of(), request);
+                exception.getFieldErrors(), request);
     }
 
     @ExceptionHandler(Exception.class)

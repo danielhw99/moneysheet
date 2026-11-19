@@ -137,6 +137,119 @@ class CategoryIntegrationTest {
         assertThat(categories.findByUser_IdOrderByIdAsc(absentUserId)).isEmpty();
     }
 
+    @Autowired com.danielhw99.budget.service.BudgetService budgetService;
+    @Autowired com.danielhw99.budget.repository.FixedBudgetItemRepository budgetItems;
+    @Autowired com.danielhw99.payment.repository.FixedPaymentRepository payments;
+    @Autowired com.danielhw99.transaction.service.TransactionService transactions;
+
+    @Test void deletionPreservesBudgetPaymentsAndTransactionsAsUncategorized() {
+        Long owner = user("category-delete@example.com");
+        var month = java.time.YearMonth.now(java.time.ZoneId.of("Asia/Seoul"));
+        var fixed = service.createOrReuse(owner, new CategoryInput("Fixed", CategoryScopeValue.FIXED_BUDGET, null));
+        var expense = service.createOrReuse(owner, new CategoryInput("Expense", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.EXPENSE));
+        budgetService.prepare(owner, month);
+        budgetService.setup(owner, month, new com.danielhw99.budget.api.BudgetDtos.SetupInput(java.util.List.of(),
+                new com.danielhw99.budget.api.BudgetDtos.Food(11L, 15L, 10L)));
+        var item = budgetService.createItem(owner, month, new com.danielhw99.budget.api.BudgetDtos.ItemInput("Rent", fixed.id(), 100L));
+        var payment = payments.saveAndFlush(new com.danielhw99.payment.entity.FixedPayment(
+                budgetItems.findById(item.id().value()).orElseThrow(), month.atDay(1), java.time.LocalTime.NOON, "partial", 40L));
+        var transaction = transactions.create(owner, month, new com.danielhw99.transaction.api.TransactionInput(
+                month.atDay(1), java.time.LocalTime.NOON, "lunch", 9L,
+                com.danielhw99.transaction.api.TransactionDirectionValue.EXPENSE, expense.id()));
+
+        service.update(owner, expense.id().value(), "Renamed");
+        assertThat(transactions.get(owner, month, transaction.id().value()).categoryId()).isEqualTo(expense.id());
+        assertThat(service.list(owner, null, null)).anyMatch(value -> value.name().equals("Renamed"));
+        service.delete(owner, fixed.id().value());
+        service.delete(owner, expense.id().value());
+        var summary = budgetService.get(owner, month).items().getFirst();
+        assertThat(summary.categoryId()).isNull();
+        assertThat(summary.name()).isEqualTo("Rent");
+        assertThat(summary.amount()).isEqualTo(100L);
+        assertThat(summary.paid()).isEqualTo(40L);
+        assertThat(payments.findById(payment.getId())).isPresent();
+        assertThat(transactions.get(owner, month, transaction.id().value()).categoryId()).isNull();
+        assertThat(transactions.get(owner, month, transaction.id().value()).amount()).isEqualTo(9L);
+        assertThatThrownBy(() -> service.delete(owner, fixed.id().value()))
+                .isInstanceOf(com.danielhw99.common.error.ApiException.class)
+                .extracting("errorCode").isEqualTo(com.danielhw99.common.error.ErrorCode.NOT_FOUND);
+    }
+
+    @Test void duplicateRenameRollsBackAndOtherScopesStillAllowSameName() {
+        Long owner = user("category-rename@example.com");
+        var first = service.createOrReuse(owner, new CategoryInput("Food", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.EXPENSE));
+        var second = service.createOrReuse(owner, new CategoryInput("Other", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.EXPENSE));
+        service.createOrReuse(owner, new CategoryInput("Food", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.INCOME));
+        assertThatThrownBy(() -> service.update(owner, second.id().value(), " FOOD "))
+                .isInstanceOf(com.danielhw99.common.error.ApiException.class)
+                .extracting("errorCode").isEqualTo(com.danielhw99.common.error.ErrorCode.CONFLICT);
+        assertThat(categories.findById(second.id().value()).orElseThrow().getName()).isEqualTo("Other");
+        assertThat(service.update(owner, first.id().value(), " FOOD ").name()).isEqualTo("FOOD");
+        Long stranger = user("category-stranger@example.com");
+        assertThatThrownBy(() -> service.delete(stranger, first.id().value()))
+                .isInstanceOf(com.danielhw99.common.error.ApiException.class)
+                .extracting("errorCode").isEqualTo(com.danielhw99.common.error.ErrorCode.NOT_FOUND);
+        assertThat(categories.findById(first.id().value())).isPresent();
+    }
+
+    @Test void deletionSerializesAgainstBudgetWriteWithoutDanglingReference() throws Exception {
+        Long owner = user("category-delete-race@example.com");
+        var month = java.time.YearMonth.now(java.time.ZoneId.of("Asia/Seoul"));
+        var fixed = service.createOrReuse(owner, new CategoryInput("Fixed", CategoryScopeValue.FIXED_BUDGET, null));
+        budgetService.prepare(owner, month);
+        budgetService.setup(owner, month, new com.danielhw99.budget.api.BudgetDtos.SetupInput(java.util.List.of(),
+                new com.danielhw99.budget.api.BudgetDtos.Food(1L, 1L, 1L)));
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var deleting = executor.submit(() -> tx.execute(status -> {
+                users.findWithLockingById(owner).orElseThrow();
+                service.delete(owner, fixed.id().value());
+                held.countDown();
+                try { if (!release.await(20, TimeUnit.SECONDS)) throw new IllegalStateException("release timeout"); }
+                catch (InterruptedException failure) { Thread.currentThread().interrupt(); throw new IllegalStateException(failure); }
+                return null;
+            }));
+            try {
+                assertThat(held.await(20, TimeUnit.SECONDS)).isTrue();
+                var writing = executor.submit(() -> {
+                    try {
+                        budgetService.createItem(owner, month, new com.danielhw99.budget.api.BudgetDtos.ItemInput("late", fixed.id(), 10L));
+                        return "created";
+                    } catch (com.danielhw99.common.error.ApiException failure) { return failure.getErrorCode().name(); }
+                });
+                awaitOwnerLockWait(owner);
+                assertThat(writing.isDone()).isFalse();
+                release.countDown();
+                deleting.get(20, TimeUnit.SECONDS);
+                assertThat(writing.get(20, TimeUnit.SECONDS)).isEqualTo("NOT_FOUND");
+                assertThat(budgetService.get(owner, month).items()).isEmpty();
+            } finally { release.countDown(); }
+        }
+    }
+
+    private void awaitOwnerLockWait(Long owner) throws Exception {
+        // Only this disposable Testcontainers root account can inspect performance_schema.
+        String sql = "SELECT COUNT(*) FROM performance_schema.data_lock_waits w "
+                + "JOIN performance_schema.data_locks l ON l.ENGINE=w.ENGINE AND l.ENGINE_LOCK_ID=w.BLOCKING_ENGINE_LOCK_ID "
+                + "WHERE l.OBJECT_SCHEMA=? AND l.OBJECT_NAME='users' AND l.INDEX_NAME='PRIMARY' AND l.LOCK_DATA=?";
+        try (var connection = java.sql.DriverManager.getConnection(MYSQL.getJdbcUrl(), "root", MYSQL.getPassword());
+             var query = connection.prepareStatement(sql)) {
+            query.setString(1, MYSQL.getDatabaseName());
+            query.setString(2, owner.toString());
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (System.nanoTime() < deadline) {
+                try (var rows = query.executeQuery()) {
+                    rows.next();
+                    if (rows.getLong(1) > 0) return;
+                }
+                Thread.sleep(25);
+            }
+        }
+        throw new AssertionError("Budget write never waited on the owned user row");
+    }
+
     private Long user(String email) {
         return users.saveAndFlush(new User(email, email, "Test", "hash", "v1", LocalDateTime.now())).getId();
     }
