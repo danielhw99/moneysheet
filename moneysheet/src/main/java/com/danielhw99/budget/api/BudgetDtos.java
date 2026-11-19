@@ -11,15 +11,16 @@ public final class BudgetDtos {
 
 
     public record Food(Long weekday, Long saturday, Long sunday) {}
-    public record ItemInput(String name, ApiId categoryId, Long amount) {}
+    public record ItemInput(String name, @Schema(nullable = true) ApiId categoryId, Long amount) {}
     public record SetupItem(
             @JsonProperty(required = true)
-            @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId id, String name, ApiId categoryId, Long amount) {}
+            @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId id, String name,
+            @Schema(nullable = true) ApiId categoryId, Long amount) {}
     public record SetupInput(List<SetupItem> items, Food food) {}
-    public record Item(ApiId id, String name, ApiId categoryId, long amount) {}
-    public record DraftItem(ApiId id, String name, ApiId categoryId, Long amount) {}
+    public record Item(ApiId id, String name, @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId categoryId, long amount) {}
+    public record DraftItem(ApiId id, String name, @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId categoryId, Long amount) {}
     public record Preparation(String month, String status, String copiedFromMonth, List<DraftItem> items, Food food) {}
-    public record ItemSummary(ApiId id, String name, ApiId categoryId, long amount,
+    public record ItemSummary(ApiId id, String name, @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId categoryId, long amount,
                               long paid, long remaining, boolean complete) {}
     public record FoodSummary(long total, List<Long> installments) {}
     public record Summary(String month, String status, List<ItemSummary> items, Food food,
