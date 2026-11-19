@@ -1,5 +1,10 @@
 package com.danielhw99.budget.api;
 
+import com.danielhw99.idempotency.IdempotentWrites;
+import org.springframework.web.bind.annotation.RequestHeader;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.YearMonth;
 
 import com.danielhw99.auth.security.AuthPrincipal;
@@ -26,7 +31,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/months/{month}")
 public class BudgetController {
     private final BudgetService service;
-    public BudgetController(BudgetService service) { this.service = service; }
+    private final IdempotentWrites writes;
+    public BudgetController(BudgetService service, IdempotentWrites writes) { this.service = service; this.writes = writes; }
 
     @PostMapping("/budget-preparation")
     public ResponseEntity<BudgetDtos.Preparation> prepare(@AuthenticationPrincipal AuthPrincipal principal,
@@ -62,9 +68,15 @@ public class BudgetController {
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<BudgetDtos.Item> createItem(@AuthenticationPrincipal AuthPrincipal principal,
                                                        @PathVariable String month,
-                                                       @RequestBody BudgetDtos.ItemInput input) {
+                                                       @RequestBody BudgetDtos.ItemInput input,
+            @Parameter(description="?? ?? ?? ???? ?? UUID ??. ?? ?? ????409.",schema=@Schema(type="string",format="uuid"))
+            @RequestHeader(name="Idempotency-Key",required=false) String requestKey) {
+        YearMonth selected = parseMonth(month);
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore())
-                .body(service.createItem(principal.userId(), parseMonth(month), input));
+                .body(requestKey == null ? service.createItem(principal.userId(), selected, input) :
+                    writes.execute(principal.userId(), requestKey, "budget-items", selected, input,
+                        () -> service.createItem(principal.userId(), selected, input),
+                        id -> service.getItem(principal.userId(), selected, id), row -> row.id().value()));
     }
 
     @PutMapping("/budget-items/{id}")

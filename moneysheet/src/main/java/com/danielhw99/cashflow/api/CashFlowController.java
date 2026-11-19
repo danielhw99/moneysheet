@@ -1,5 +1,8 @@
 package com.danielhw99.cashflow.api;
 
+import com.danielhw99.idempotency.IdempotentWrites;
+import org.springframework.web.bind.annotation.RequestHeader;
+
 import java.time.YearMonth;
 import java.time.LocalDate;
 import com.danielhw99.cashflow.service.CashFlowReadService;
@@ -29,9 +32,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/months/{month}/cash-flows")
 public class CashFlowController {
+    private final IdempotentWrites writes;
     private final CashFlowService service;
     private final CashFlowReadService reads;
-    public CashFlowController(CashFlowService service, CashFlowReadService reads) { this.service = service; this.reads = reads; }
+    public CashFlowController(CashFlowService service, CashFlowReadService reads, IdempotentWrites writes) { this.service = service; this.reads = reads; this.writes = writes; }
     @GetMapping
     public ResponseEntity<CashFlowList> list(@AuthenticationPrincipal AuthPrincipal user,
             @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month,
@@ -44,8 +48,11 @@ public class CashFlowController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<CashFlowResponse> create(@AuthenticationPrincipal AuthPrincipal user,
-            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody CashFlowInput input) {
-        return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(service.create(user.userId(), month, input));
+            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody CashFlowInput input,
+            @Parameter(description="?? ?? ?? ???? ?? UUID ??. ?? ?? ????409.",schema=@Schema(type="string",format="uuid"))
+            @RequestHeader(name="Idempotency-Key",required=false) String requestKey) {
+        return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(requestKey == null ? service.create(user.userId(), month, input) : writes.execute(user.userId(), requestKey, "cash-flows", month, input,
+                () -> service.create(user.userId(), month, input), id -> service.get(user.userId(), month, id), row -> row.id().value()));
     }
     @GetMapping("/{id}")
     public ResponseEntity<CashFlowResponse> get(@AuthenticationPrincipal AuthPrincipal user,

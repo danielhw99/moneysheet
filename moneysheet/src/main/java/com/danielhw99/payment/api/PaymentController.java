@@ -1,5 +1,8 @@
 package com.danielhw99.payment.api;
 
+import com.danielhw99.idempotency.IdempotentWrites;
+import org.springframework.web.bind.annotation.RequestHeader;
+
 import java.time.YearMonth;
 import com.danielhw99.payment.service.PaymentReadService;
 import java.time.LocalDate;
@@ -29,9 +32,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/months/{month}/fixed-payments")
 public class PaymentController {
+    private final IdempotentWrites writes;
     private final PaymentService service;
     private final PaymentReadService reads;
-    public PaymentController(PaymentService service, PaymentReadService reads) { this.service = service; this.reads = reads; }
+    public PaymentController(PaymentService service, PaymentReadService reads, IdempotentWrites writes) { this.service = service; this.reads = reads; this.writes = writes; }
     @GetMapping
     public ResponseEntity<PaymentList> list(@AuthenticationPrincipal AuthPrincipal user,
             @Parameter(schema=@Schema(type="string",pattern="^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month,
@@ -45,8 +49,11 @@ public class PaymentController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<PaymentResponse> create(@AuthenticationPrincipal AuthPrincipal user,
-            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody PaymentInput input) {
-        return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(service.create(user.userId(), month, input));
+            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody PaymentInput input,
+            @Parameter(description="?? ?? ?? ???? ?? UUID ??. ?? ?? ????409.",schema=@Schema(type="string",format="uuid"))
+            @RequestHeader(name="Idempotency-Key",required=false) String requestKey) {
+        return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(requestKey == null ? service.create(user.userId(), month, input) : writes.execute(user.userId(), requestKey, "fixed-payments", month, input,
+                () -> service.create(user.userId(), month, input), id -> service.get(user.userId(), month, id), row -> row.id().value()));
     }
     @GetMapping("/{id}")
     public ResponseEntity<PaymentResponse> get(@AuthenticationPrincipal AuthPrincipal user,
