@@ -204,7 +204,6 @@ class CategoryIntegrationTest {
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
         try (var executor = Executors.newFixedThreadPool(2)) {
             var deleting = executor.submit(() -> tx.execute(status -> {
-                users.findWithLockingById(owner).orElseThrow();
                 service.delete(owner, fixed.id().value());
                 held.countDown();
                 try { if (!release.await(20, TimeUnit.SECONDS)) throw new IllegalStateException("release timeout"); }
