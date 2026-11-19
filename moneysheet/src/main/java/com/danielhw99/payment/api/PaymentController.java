@@ -50,7 +50,7 @@ public class PaymentController {
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<PaymentResponse> create(@AuthenticationPrincipal AuthPrincipal user,
             @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody PaymentInput input,
-            @Parameter(description="같은 저장 시도의 재전송은 같은 UUID를 사용합니다. 다른 내용의 재사용은409입니다.",schema=@Schema(type="string",format="uuid",minLength=36,maxLength=36))
+            @Parameter(description="선택적 UUID 헤더입니다. 같은 저장 재시도에는 같은 키를 사용하며 다른 내용의 재사용은409입니다.",schema=@Schema(type="string",format="uuid",minLength=36,maxLength=36))
             @RequestHeader(name="Idempotency-Key",required=false) String requestKey) {
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(requestKey == null ? service.create(user.userId(), month, input) : writes.execute(user.userId(), requestKey, "fixed-payments", month, input,
                 () -> service.create(user.userId(), month, input), id -> service.get(user.userId(), month, id), row -> row.id().value()));

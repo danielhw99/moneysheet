@@ -69,7 +69,7 @@ public class BudgetController {
     public ResponseEntity<BudgetDtos.Item> createItem(@AuthenticationPrincipal AuthPrincipal principal,
                                                        @PathVariable String month,
                                                        @RequestBody BudgetDtos.ItemInput input,
-            @Parameter(description="같은 저장 시도의 재전송은 같은 UUID를 사용합니다. 다른 내용의 재사용은409입니다.",schema=@Schema(type="string",format="uuid",minLength=36,maxLength=36))
+            @Parameter(description="선택적 UUID 헤더입니다. 같은 저장 재시도에는 같은 키를 사용하며 다른 내용의 재사용은409입니다.",schema=@Schema(type="string",format="uuid",minLength=36,maxLength=36))
             @RequestHeader(name="Idempotency-Key",required=false) String requestKey) {
         YearMonth selected = parseMonth(month);
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore())
