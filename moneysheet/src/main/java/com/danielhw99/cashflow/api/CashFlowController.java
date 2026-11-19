@@ -49,7 +49,7 @@ public class CashFlowController {
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<CashFlowResponse> create(@AuthenticationPrincipal AuthPrincipal user,
             @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody CashFlowInput input,
-            @Parameter(description="?? ?? ?? ???? ?? UUID ??. ?? ?? ????409.",schema=@Schema(type="string",format="uuid"))
+            @Parameter(description="같은 저장 시도의 재전송은 같은 UUID를 사용합니다. 다른 내용의 재사용은409입니다.",schema=@Schema(type="string",format="uuid",minLength=36,maxLength=36))
             @RequestHeader(name="Idempotency-Key",required=false) String requestKey) {
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(requestKey == null ? service.create(user.userId(), month, input) : writes.execute(user.userId(), requestKey, "cash-flows", month, input,
                 () -> service.create(user.userId(), month, input), id -> service.get(user.userId(), month, id), row -> row.id().value()));
