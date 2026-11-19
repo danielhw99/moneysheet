@@ -40,6 +40,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 @WebMvcTest(PaymentController.class)
 @Import({SecurityConfiguration.class, SecurityErrorWriter.class, ApiJsonConfiguration.class, TraceIdFilter.class})
 class PaymentMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.idempotency.IdempotentWrites writes;
  @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.user.repository.UserRepository sessionUsers;
  @org.junit.jupiter.api.BeforeEach void activeSessionUser(){
   org.mockito.Mockito.when(sessionUsers.findById(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(call->{

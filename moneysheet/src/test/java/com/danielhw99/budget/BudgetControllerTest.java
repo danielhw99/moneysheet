@@ -11,7 +11,7 @@ import com.danielhw99.common.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 
 class BudgetControllerTest {
-    private final BudgetController controller = new BudgetController(mock(BudgetService.class));
+    private final BudgetController controller = new BudgetController(mock(BudgetService.class), mock(com.danielhw99.idempotency.IdempotentWrites.class));
     private final AuthPrincipal principal = new AuthPrincipal(1L, "test@example.com", "test");
 
     @Test void malformedMonthIsValidationError() {

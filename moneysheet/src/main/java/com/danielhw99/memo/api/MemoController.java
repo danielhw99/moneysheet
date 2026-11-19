@@ -1,5 +1,8 @@
 package com.danielhw99.memo.api;
 
+import com.danielhw99.idempotency.IdempotentWrites;
+import org.springframework.web.bind.annotation.RequestHeader;
+
 import java.time.YearMonth;
 import com.danielhw99.memo.service.MemoReadService;
 import java.time.LocalDate;
@@ -29,9 +32,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/months/{month}/memos")
 public class MemoController {
+    private final IdempotentWrites writes;
     private final MemoService service;
     private final MemoReadService reads;
-    public MemoController(MemoService service, MemoReadService reads) { this.service = service; this.reads = reads; }
+    public MemoController(MemoService service, MemoReadService reads, IdempotentWrites writes) { this.service = service; this.reads = reads; this.writes = writes; }
 
     @GetMapping
     public ResponseEntity<MemoList> list(@AuthenticationPrincipal AuthPrincipal user,
@@ -59,8 +63,11 @@ public class MemoController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<MemoResponse> create(@AuthenticationPrincipal AuthPrincipal user,
-            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody MemoInput input) {
-        return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(service.create(user.userId(), month, input));
+            @Parameter(schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$")) @PathVariable YearMonth month, @Valid @RequestBody MemoInput input,
+            @Parameter(description="선택적 UUID 헤더입니다. 같은 저장 재시도에는 같은 키를 사용하며 다른 내용의 재사용은409입니다.",schema=@Schema(type="string",format="uuid",minLength=36,maxLength=36))
+            @RequestHeader(name="Idempotency-Key",required=false) String requestKey) {
+        return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(requestKey == null ? service.create(user.userId(), month, input) : writes.execute(user.userId(), requestKey, "memos", month, input,
+                () -> service.create(user.userId(), month, input), id -> service.get(user.userId(), month, id), row -> row.id().value()));
     }
     @GetMapping("/{id}")
     public ResponseEntity<MemoResponse> get(@AuthenticationPrincipal AuthPrincipal user,

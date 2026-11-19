@@ -200,6 +200,16 @@ public class BudgetService {
         return itemResponse(saved);
     }
 
+    @Transactional(readOnly = true)
+    public Item getItem(Long userId, YearMonth month, Long id) {
+        FixedBudgetItem item = items.findById(id)
+                .filter(candidate -> candidate.getMonthlyBudget().getUser().getId().equals(userId)
+                        && candidate.getMonthlyBudget().getMonthStart().equals(month.atDay(1)))
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+        requireReady(item.getMonthlyBudget());
+        return itemResponse(item);
+    }
+
     @Transactional
     public Item updateItem(Long userId, YearMonth month, Long id, ItemInput input) {
         FixedBudgetItem item = writableItem(userId, month, id);
