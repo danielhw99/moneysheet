@@ -33,6 +33,11 @@ public class User extends BaseEntity {
     @Column(name = "session_version", nullable = false)
     private long sessionVersion;
 
+    @Column(name="email_verified",nullable=false)
+    private boolean emailVerified;
+    public boolean isEmailVerified(){return emailVerified;}
+    public void verifyEmail(){emailVerified=true;}
+
     public long getSessionVersion() { return sessionVersion; }
     public void rename(String nickname) { this.nickname = nickname; }
     public void changePassword(String hash) { passwordHash = hash; sessionVersion = Math.incrementExact(sessionVersion); }

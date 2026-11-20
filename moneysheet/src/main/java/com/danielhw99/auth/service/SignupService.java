@@ -22,9 +22,12 @@ public class SignupService {
     private final PasswordPolicy policy;
     private final Clock clock;
     private final String policyVersion;
+    private final com.danielhw99.auth.email.EmailVerificationService verification;
     public SignupService(UserRepository users, PasswordEncoder encoder, PasswordPolicy policy, Clock clock,
-            @Value("${moneysheet.auth.privacy-policy-version:v1}") String policyVersion) {
+            @Value("${moneysheet.auth.privacy-policy-version:v1}") String policyVersion,
+            com.danielhw99.auth.email.EmailVerificationService verification) {
         this.users=users; this.encoder=encoder; this.policy=policy; this.clock=clock; this.policyVersion=policyVersion;
+        this.verification=verification;
     }
     @Transactional
     public Profile signup(SignupInput input) {
@@ -33,8 +36,10 @@ public class SignupService {
             throw new ApiException(ErrorCode.VALIDATION);
         }
         if (users.existsByEmailKey(input.email())) throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        verification.consume(input.email(),input.verificationToken());
         User user = new User(input.email(), input.email(), input.nickname(), encoder.encode(input.password()),
                 policyVersion, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+        user.verifyEmail();
         try {
             return Profile.from(users.saveAndFlush(user));
         } catch (DataIntegrityViolationException duplicate) {

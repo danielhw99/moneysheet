@@ -29,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT, properties={"spring.jpa.hibernate.ddl-auto=validate","spring.flyway.enabled=false","server.servlet.session.cookie.secure=false"})
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(VerificationTestSupport.class)
 @ContextConfiguration(initializers=AuthIntegrationTest.Database.class)
 class AuthIntegrationTest {
  static final MySQLContainer MYSQL=new MySQLContainer("mysql:8.4.13").withDatabaseName("moneysheet_test")
@@ -40,7 +41,11 @@ class AuthIntegrationTest {
   public void initialize(ConfigurableApplicationContext context) {
    MYSQL.start();
    Flyway.configure().dataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword())
-     .cleanDisabled(true).createSchemas(false).baselineOnMigrate(false).load().migrate();
+     .cleanDisabled(true).createSchemas(false).baselineOnMigrate(false).target("6").load().migrate();
+   try(var connection=java.sql.DriverManager.getConnection(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());var statement=connection.createStatement()) {
+    statement.executeUpdate("INSERT INTO users(email,email_key,nickname,password_hash,privacy_policy_version,privacy_agreed_at,created_at,updated_at) VALUES ('legacy@example.com','legacy@example.com','Legacy','hash','v1',NOW(6),NOW(6),NOW(6))");
+   } catch(java.sql.SQLException e){throw new IllegalStateException(e);}
+   Flyway.configure().dataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword()).load().migrate();
    TestPropertyValues.of("spring.datasource.url="+MYSQL.getJdbcUrl(),"spring.datasource.username="+MYSQL.getUsername(),
     "spring.datasource.password="+MYSQL.getPassword(),"spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver").applyTo(context);
   }
@@ -51,12 +56,76 @@ class AuthIntegrationTest {
  @Autowired UserRepository users;
  @Autowired SignupService signup;
  @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+ @Autowired com.danielhw99.auth.email.EmailVerificationService verification;
+ @Autowired VerificationTestSupport.Mailbox mailbox;
+ String proof(String email){return VerificationTestSupport.proof(verification,mailbox,email);}
+
+ @Test void v7VerifiesOnlyExistingAccountsAndUnverifiedSignupCannotBypass() throws Exception {
+  assertThat(jdbc.queryForObject("SELECT email_verified FROM users WHERE email_key='legacy@example.com'",Boolean.class)).isTrue();
+  jdbc.update("INSERT INTO users(email,email_key,nickname,password_hash,privacy_policy_version,privacy_agreed_at,created_at,updated_at) VALUES ('after-v7@example.com','after-v7@example.com','New','hash','v1',NOW(6),NOW(6),NOW(6))");
+  assertThat(jdbc.queryForObject("SELECT email_verified FROM users WHERE email_key='after-v7@example.com'",Boolean.class)).isFalse();
+  mvc.perform(post("/api/v1/auth/signup").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+    .contentType("application/json").content("{\"email\":\"bypass@example.com\",\"nickname\":\"N\",\"password\":\"a unique long password!\",\"privacyPolicyVersion\":\"v1\",\"privacyAgreed\":true}"))
+    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
+  assertThat(users.existsByEmailKey("bypass@example.com")).isFalse();
+ }
+
+ @Test void verificationHttpFlowIsPublicCsrfProtectedAndBindsEmail() throws Exception {
+  String email="verify-http@example.com";
+  var result=mvc.perform(get("/api/v1/auth/csrf")).andReturn();
+  var session=(MockHttpSession)result.getRequest().getSession(false);
+  String csrf=mapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
+  mvc.perform(post("/api/v1/auth/email-verifications").session(session).contentType("application/json").content("{\"email\":\""+email+"\"}"))
+   .andExpect(status().isForbidden());
+  var sent=mvc.perform(post("/api/v1/auth/email-verifications").session(session).header("X-CSRF-TOKEN",csrf).contentType("application/json").content("{\"email\":\""+email+"\"}"))
+   .andExpect(status().isOk()).andExpect(jsonPath("$.code").doesNotExist()).andReturn();
+  String challenge=mapper.readTree(sent.getResponse().getContentAsString()).get("challengeId").asText();
+  String code=mailbox.codes.get(email);
+  assertThat(jdbc.queryForObject("SELECT code_hash FROM email_verifications WHERE email_key=?",String.class,email)).doesNotContain(code).startsWith("{argon2id}");
+  var verified=mvc.perform(post("/api/v1/auth/email-verifications/confirmation").session(session).header("X-CSRF-TOKEN",csrf).contentType("application/json")
+   .content("{\"email\":\""+email+"\",\"challengeId\":\""+challenge+"\",\"code\":\""+code+"\"}"))
+   .andExpect(status().isOk()).andReturn();
+  String proof=mapper.readTree(verified.getResponse().getContentAsString()).get("verificationToken").asText();
+  assertThatThrownBy(()->signup.signup(new SignupInput("other-email@example.com","N","a unique long password!","v1",true,proof))).isInstanceOf(ApiException.class);
+  var saved=signup.signup(new SignupInput(email,"N","a unique long password!","v1",true,proof));
+  assertThat(users.findById(Long.parseLong(saved.id().jsonValue())).orElseThrow().isEmailVerified()).isTrue();
+  assertThat(jdbc.queryForObject("SELECT code_hash FROM email_verifications WHERE email_key=?",String.class,email)).isNull();
+ }
+
+ @Test void wrongGuessesCommitDespiteExceptionsAndResendInvalidatesProof() {
+  String email="wrong-guesses@example.com";
+  var sent=verification.request(email);String correct=mailbox.codes.get(email),wrong=correct.equals("000000")?"000001":"000000";
+  for(int i=0;i<5;i++) assertThatThrownBy(()->verification.confirm(email,sent.challengeId(),wrong)).isInstanceOf(ApiException.class);
+  assertThat(jdbc.queryForObject("SELECT attempts FROM email_verifications WHERE email_key=?",Integer.class,email)).isEqualTo(5);
+  assertThatThrownBy(()->verification.confirm(email,sent.challengeId(),correct)).isInstanceOf(ApiException.class);
+  jdbc.update("UPDATE email_verifications SET sent_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 61 SECOND) WHERE email_key=?",email);
+  var resent=verification.request(email);
+  assertThat(resent.challengeId()).isNotEqualTo(sent.challengeId());
+  var proof=verification.confirm(email,resent.challengeId(),mailbox.codes.get(email)).verificationToken();
+  jdbc.update("UPDATE email_verifications SET sent_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 61 SECOND) WHERE email_key=?",email);
+  verification.request(email);
+  assertThatThrownBy(()->verification.consume(email,proof)).isInstanceOf(ApiException.class);
+ }
+
+ @Test void mailFailureRollsBackAndFailedSignupDoesNotConsumeProof() {
+  String email="rollback-email@example.com";
+  mailbox.fail=true;
+  try {assertThatThrownBy(()->verification.request(email)).isInstanceOf(ApiException.class);}
+  finally {mailbox.fail=false;}
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM email_verifications WHERE email_key=?",Integer.class,email)).isZero();
+  String proof=proof(email);
+  assertThatThrownBy(()->signup.signup(new SignupInput(email,null,"a unique long password!","v1",true,proof))).isInstanceOf(RuntimeException.class);
+  assertThat(jdbc.queryForObject("SELECT consumed FROM email_verifications WHERE email_key=?",Boolean.class,email)).isFalse();
+  signup.signup(new SignupInput(email,"Recovered","a unique long password!","v1",true,proof));
+  assertThat(jdbc.queryForObject("SELECT consumed FROM email_verifications WHERE email_key=?",Boolean.class,email)).isTrue();
+ }
 
  @Test void signupLoginOwnProfileAndLogoutAgainstRealMysql() throws Exception {
   var csrf=mvc.perform(get("/api/v1/auth/csrf")).andExpect(status().isOk()).andReturn();
   var session=(MockHttpSession)csrf.getRequest().getSession(false);
   String token=mapper.readTree(csrf.getResponse().getContentAsString()).get("token").asText();
   String payload="{\"email\":\" Integration@Example.COM \",\"nickname\":\" Nick \",\"password\":\"a unique long password!\",\"privacyPolicyVersion\":\"v1\",\"privacyAgreed\":true}";
+  payload=payload.substring(0,payload.length()-1)+",\"verificationToken\":\""+proof("integration@example.com")+"\"}";
   mvc.perform(post("/api/v1/auth/signup").session(session).header("X-CSRF-TOKEN",token).contentType("application/json").content(payload))
     .andExpect(status().isCreated()).andExpect(jsonPath("$.email").value("integration@example.com"));
   mvc.perform(get("/api/v1/me").session(session)).andExpect(status().isUnauthorized());
@@ -73,16 +142,18 @@ class AuthIntegrationTest {
   String freshToken=mapper.readTree(fresh.getResponse().getContentAsString()).get("token").asText();
   mvc.perform(post("/api/v1/auth/logout").session(session).header("X-CSRF-TOKEN",freshToken)).andExpect(status().isNoContent());
   mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
-  assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6");
+  assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7");
  }
 
  @Test void concurrentSignupPreservesUniqueEmail() throws Exception {
-  var input=new SignupInput("race@example.com","race","a concurrent password!","v1",true);
+  var input=new SignupInput("race@example.com","race","a concurrent password!","v1",true,proof("race@example.com"));
   var start=new CountDownLatch(1);
   Callable<String> action=()->{start.await();try{signup.signup(input);return "created";}catch(ApiException e){return e.getErrorCode().name();}};
   try(var executor=Executors.newFixedThreadPool(2)) {
    var one=executor.submit(action);var two=executor.submit(action);start.countDown();
-   assertThat(List.of(one.get(30,TimeUnit.SECONDS),two.get(30,TimeUnit.SECONDS))).containsExactlyInAnyOrder("created",ErrorCode.EMAIL_ALREADY_EXISTS.name());
+   var outcomes=List.of(one.get(30,TimeUnit.SECONDS),two.get(30,TimeUnit.SECONDS));
+   assertThat(outcomes).containsOnly("created",ErrorCode.EMAIL_ALREADY_EXISTS.name(),ErrorCode.VALIDATION.name());
+   assertThat(outcomes.stream().filter("created"::equals).count()).isEqualTo(1);
   }
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE email_key='race@example.com'",Long.class)).isEqualTo(1);
  }
@@ -109,6 +180,7 @@ class AuthIntegrationTest {
    String before=cookies.getCookieStore().getCookies().stream().filter(c->c.getName().equals("JSESSIONID")).findFirst().orElseThrow().getValue();
    String token=mapper.readTree(csrf.body()).get("token").asText();
    String signupBody="{\"email\":\"http@example.com\",\"nickname\":\"HTTP\",\"password\":\"http integration password!\",\"privacyPolicyVersion\":\"v1\",\"privacyAgreed\":true}";
+   signupBody=signupBody.substring(0,signupBody.length()-1)+",\"verificationToken\":\""+proof("http@example.com")+"\"}";
    var signupResponse=client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base+"/api/v1/auth/signup"))
      .header("Content-Type","application/json").header("X-CSRF-TOKEN",token).POST(java.net.http.HttpRequest.BodyPublishers.ofString(signupBody)).build(),java.net.http.HttpResponse.BodyHandlers.ofString());
    assertThat(signupResponse.statusCode()).isEqualTo(201);

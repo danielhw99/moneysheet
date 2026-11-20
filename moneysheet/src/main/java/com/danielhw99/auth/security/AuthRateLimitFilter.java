@@ -15,13 +15,21 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     private static final RequestMatcher SIGNUP = PathPatternRequestMatcher.withDefaults()
             .matcher(HttpMethod.POST,"/api/v1/auth/signup");
     private final AuthRateLimiter limiter;
+    private static final RequestMatcher SEND = PathPatternRequestMatcher.withDefaults()
+            .matcher(HttpMethod.POST,"/api/v1/auth/email-verifications");
+    private static final RequestMatcher CONFIRM = PathPatternRequestMatcher.withDefaults()
+            .matcher(HttpMethod.POST,"/api/v1/auth/email-verifications/confirmation");
     private final SecurityErrorWriter errors;
     public AuthRateLimitFilter(AuthRateLimiter limiter,SecurityErrorWriter errors) { this.limiter=limiter;this.errors=errors; }
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)
             throws ServletException,IOException {
         boolean signup=SIGNUP.matches(request);
-        if(signup || LOGIN.matches(request)) {
-            try { limiter.request(request.getRemoteAddr(),signup); }
+        boolean confirm=CONFIRM.matches(request);
+        if(signup || LOGIN.matches(request) || SEND.matches(request) || confirm) {
+            try {
+                if(SEND.matches(request) || confirm) limiter.verificationRequest(request.getRemoteAddr(),confirm);
+                else limiter.request(request.getRemoteAddr(),signup);
+            }
             catch(ApiException limited) {
                 response.setHeader("Retry-After",limited.getRetryAfterSeconds().toString());
                 errors.write(request,response,limited.getErrorCode());return;

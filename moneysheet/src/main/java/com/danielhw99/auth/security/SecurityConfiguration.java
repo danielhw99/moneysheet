@@ -20,6 +20,7 @@ import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 
 @Configuration(proxyBeanMethods=false)
+@org.springframework.scheduling.annotation.EnableScheduling
 @EnableWebSecurity
 public class SecurityConfiguration {
     @Bean public Clock authClock() { return Clock.systemUTC(); }
@@ -45,7 +46,8 @@ public class SecurityConfiguration {
                     .accessDeniedHandler((request,response,error) -> errors.write(request,response,
                             error instanceof CsrfException ? ErrorCode.CSRF_INVALID : ErrorCode.FORBIDDEN)))
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/signup", "/api/v1/auth/login").permitAll();
+                    authorize.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/signup", "/api/v1/auth/login",
+                        "/api/v1/auth/email-verifications", "/api/v1/auth/email-verifications/confirmation").permitAll();
                     if (environment.matchesProfiles("local")) {
                         authorize.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
                     }

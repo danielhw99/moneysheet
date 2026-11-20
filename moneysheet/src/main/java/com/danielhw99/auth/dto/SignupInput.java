@@ -14,7 +14,11 @@ public record SignupInput(
         @NotBlank @Size(max=50) String nickname,
         @NotNull @Schema(accessMode=Schema.AccessMode.WRITE_ONLY,minLength=15,maxLength=128) String password,
         @NotBlank @Size(max=50) String privacyPolicyVersion,
-        @NotNull @AssertTrue Boolean privacyAgreed) {
+        @NotNull @AssertTrue Boolean privacyAgreed,
+        @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{43}") @Schema(accessMode=Schema.AccessMode.WRITE_ONLY) String verificationToken) {
+    public SignupInput(String email,String nickname,String password,String privacyPolicyVersion,Boolean privacyAgreed) {
+        this(email,nickname,password,privacyPolicyVersion,privacyAgreed,null);
+    }
     public SignupInput {
         email = email == null ? null : email.strip().toLowerCase(Locale.ROOT);
         nickname = nickname == null ? null : nickname.strip();

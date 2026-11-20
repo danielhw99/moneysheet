@@ -21,6 +21,7 @@ class LoginServiceTest {
  @Test void doesNotApplySignupMinimumLengthToLogin() {
   var users=mock(UserRepository.class);var encoder=mock(PasswordEncoder.class);
   var user=new User("u@example.com","u@example.com","n","hash","v1",java.time.LocalDateTime.now());
+  user.verifyEmail();
   org.springframework.test.util.ReflectionTestUtils.setField(user,"id",3L);
   when(users.findByEmailKey("u@example.com")).thenReturn(Optional.of(user));when(encoder.matches("short","hash")).thenReturn(true);
   var service=new LoginService(users,encoder,new com.danielhw99.auth.security.AuthRateLimiter(java.time.Clock.systemUTC()));
