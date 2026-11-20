@@ -25,7 +25,7 @@ public class LoginService {
         try (var attempt = limiter.beginAttempt(input.email())) {
             var user = users.findByEmailKey(input.email());
             boolean matches = encoder.matches(input.password(), user.map(u -> u.getPasswordHash()).orElse(dummyHash));
-            if (!matches || user.isEmpty()) {
+            if (!matches || user.isEmpty() || !user.orElseThrow().isEmailVerified()) {
                 attempt.failed();
                 throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
             }

@@ -21,7 +21,8 @@ class SignupServiceTest {
  @Test void normalizesAndHashesWithoutTrimmingPassword() {
   var users=mock(UserRepository.class);var encoder=new SecurityConfiguration().passwordEncoder();
   when(users.saveAndFlush(any())).thenAnswer(call->{User u=call.getArgument(0);ReflectionTestUtils.setField(u,"id",1L);return u;});
-  var service=new SignupService(users,encoder,new PasswordPolicy(),Clock.fixed(Instant.parse("2026-11-13T00:00:00Z"),ZoneOffset.UTC),"v1");
+  var verification=mock(com.danielhw99.auth.email.EmailVerificationService.class);
+  var service=new SignupService(users,encoder,new PasswordPolicy(),Clock.fixed(Instant.parse("2026-11-13T00:00:00Z"),ZoneOffset.UTC),"v1",verification);
   var input=new SignupInput(" USER@Example.COM "," Nick ","  secure password for test  ","v1",true);
   var profile=service.signup(input);
   assertThat(profile.email()).isEqualTo("user@example.com");assertThat(profile.nickname()).isEqualTo("Nick");
@@ -30,10 +31,12 @@ class SignupServiceTest {
   assertThat(encoder.matches(input.password(),saved.getValue().getPasswordHash())).isTrue();
   assertThat(encoder.matches(input.password().strip(),saved.getValue().getPasswordHash())).isFalse();
   assertThat(saved.getValue().getPrivacyAgreedDate()).isEqualTo(LocalDateTime.parse("2026-11-13T00:00:00"));
+  verify(verification).consume(input.email(),input.verificationToken());
+  assertThat(saved.getValue().isEmailVerified()).isTrue();
  }
  @Test void rejectsDuplicateAndWrongConsentBeforeInsert() {
   var users=mock(UserRepository.class);var encoder=mock(org.springframework.security.crypto.password.PasswordEncoder.class);
-  var service=new SignupService(users,encoder,new PasswordPolicy(),Clock.systemUTC(),"v1");
+  var service=new SignupService(users,encoder,new PasswordPolicy(),Clock.systemUTC(),"v1",mock(com.danielhw99.auth.email.EmailVerificationService.class));
   when(users.existsByEmailKey("user@example.com")).thenReturn(true);
   assertThatThrownBy(()->service.signup(new SignupInput("user@example.com","n","valid long password!","v1",true)))
     .isInstanceOfSatisfying(ApiException.class,e->assertThat(e.getErrorCode()).isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS));

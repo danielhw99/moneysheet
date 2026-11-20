@@ -10,6 +10,15 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import static org.mockito.Mockito.*;
 
 class AuthRateLimitFilterTest {
+    @Test void verificationPathsUseIndependentSendAndConfirmLimits() throws Exception {
+        var limiter=mock(AuthRateLimiter.class);
+        var filter=new AuthRateLimitFilter(limiter,mock(SecurityErrorWriter.class));
+        for(String path:new String[]{"/api/v1/auth/email-verifications","/api/v1/auth/email-verifications/confirmation"}) {
+            var request=new MockHttpServletRequest("POST",path);
+            filter.doFilter(request,new MockHttpServletResponse(),mock(FilterChain.class));
+            verify(limiter).verificationRequest(request.getRemoteAddr(),path.endsWith("confirmation"));
+        }
+    }
     @Test void encodedAuthPathsUseTheSameBucketsAsPlainPaths() throws Exception {
         for (String path : new String[]{"/api/v1/auth/login", "/api/v1/auth/%6cogin",
                 "/api/v1/auth/signup", "/api/v1/auth/%73ignup"}) {

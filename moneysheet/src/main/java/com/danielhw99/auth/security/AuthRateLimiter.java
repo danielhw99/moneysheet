@@ -45,6 +45,8 @@ public class AuthRateLimiter {
 
     private final Map<String, Window> signupWindows = new HashMap<>();
     private final Map<String, Window> loginWindows = new HashMap<>();
+    private final Map<String, Window> verificationSendWindows = new HashMap<>();
+    private final Map<String, Window> verificationCheckWindows = new HashMap<>();
     private final Map<String, AccountWindow> accountWindows = new HashMap<>();
     private final Clock clock;
 
@@ -52,16 +54,23 @@ public class AuthRateLimiter {
 
     public synchronized void request(String ip, boolean signup) {
         Map<String, Window> windows = signup ? signupWindows : loginWindows;
+        countRequest(windows,ip,signup?10:30,signup?3600:60);
+    }
+
+    public synchronized void verificationRequest(String ip,boolean confirmation) {
+        countRequest(confirmation?verificationCheckWindows:verificationSendWindows,ip,confirmation?30:10,confirmation?60:3600);
+    }
+
+    private void countRequest(Map<String,Window> windows,String ip,int limit,long seconds) {
         long now = clock.instant().getEpochSecond();
         Window window = active(windows, ip, now);
-        int limit = signup ? 10 : 30;
         if (window != null && window.count() >= limit) limited(window.expires() - now);
         if (!windows.containsKey(ip) && windows.size() >= MAX_IP_KEYS) {
             windows.values().removeIf(value -> value.expires() <= now);
             if (windows.size() >= MAX_IP_KEYS) limited(60);
         }
         windows.put(ip, new Window(window == null ? 1 : window.count() + 1,
-                window == null ? now + (signup ? 3600 : 60) : window.expires()));
+                window == null ? now + seconds : window.expires()));
     }
 
     // The failure check and reservation share the same monitor, not the expensive hash calculation.

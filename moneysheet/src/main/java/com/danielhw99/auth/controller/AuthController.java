@@ -53,7 +53,7 @@ public class AuthController {
 
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary="회원가입", description="성공 후 자동 로그인하지 않습니다. 개인정보처리방침 버전 기본값은 v1입니다.")
+    @Operation(summary="회원가입", description="동일 이메일의 인증 성공 증명 verificationToken이 필수이며 한 번만 소비합니다. 성공 후 자동 로그인하지 않습니다. 개인정보처리방침 버전은 v1입니다.")
     public Profile signup(@Valid @RequestBody SignupInput input) { return signup.signup(input); }
 
     @PostMapping("/login")

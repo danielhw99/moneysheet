@@ -31,6 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.mysql.MySQLContainer;
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT,properties={"spring.jpa.hibernate.ddl-auto=validate","spring.flyway.enabled=false","server.servlet.session.cookie.secure=false"})
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(com.danielhw99.auth.VerificationTestSupport.class)
 @ContextConfiguration(initializers=AccountIntegrationTest.Database.class)
 class AccountIntegrationTest {
  static final MySQLContainer MYSQL=new MySQLContainer("mysql:8.4.13").withDatabaseName("account_test")
@@ -38,7 +39,9 @@ class AccountIntegrationTest {
  static class Database implements ApplicationContextInitializer<ConfigurableApplicationContext>{public void initialize(ConfigurableApplicationContext c){MYSQL.start();Flyway.configure().dataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword()).cleanDisabled(true).createSchemas(false).load().migrate();TestPropertyValues.of("spring.datasource.url="+MYSQL.getJdbcUrl(),"spring.datasource.username="+MYSQL.getUsername(),"spring.datasource.password="+MYSQL.getPassword(),"spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver").applyTo(c);}}
  @Autowired MockMvc mvc;@Autowired SignupService signup;@Autowired AccountService accounts;@Autowired UserRepository users;@Autowired JdbcTemplate jdbc;@Autowired PlatformTransactionManager tm;@Autowired TransactionService transactions;@Autowired CategoryService categories;
  static final String PASSWORD="a unique account password!";
- long account(){String email=UUID.randomUUID()+"@example.com";return Long.parseLong(signup.signup(new SignupInput(email,"Nick",PASSWORD,"v1",true)).id().jsonValue());}
+ @Autowired com.danielhw99.auth.email.EmailVerificationService verification;
+ @Autowired com.danielhw99.auth.VerificationTestSupport.Mailbox mailbox;
+ long account(){String email=UUID.randomUUID()+"@example.com";String proof=com.danielhw99.auth.VerificationTestSupport.proof(verification,mailbox,email);return Long.parseLong(signup.signup(new SignupInput(email,"Nick",PASSWORD,"v1",true,proof)).id().jsonValue());}
  MockHttpSession login(long id,String password) throws Exception {
   var result=mvc.perform(get("/api/v1/auth/csrf")).andReturn();var session=(MockHttpSession)result.getRequest().getSession(false);
   String email=users.findById(id).orElseThrow().getEmail();

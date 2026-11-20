@@ -47,6 +47,7 @@ public class AccountService {
   delete("DELETE FROM daily_balance_checks WHERE user_id=:owner",id);
   delete("DELETE FROM monthly_budgets WHERE user_id=:owner",id);
   delete("DELETE FROM categories WHERE user_id=:owner",id);
+  em.createNativeQuery("DELETE FROM email_verifications WHERE email_key=:email").setParameter("email",user.getEmailKey()).executeUpdate();
   em.remove(user);em.flush();
  }
  private void delete(String sql,Long id) {em.createNativeQuery(sql).setParameter("owner",id).executeUpdate();}
