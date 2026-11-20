@@ -15,14 +15,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth/email-verifications")
 public class EmailVerificationController {
+    @Schema(name="EmailVerificationRequest")
     public record Request(
         @NotBlank @Email @Pattern(regexp="^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$") @Size(max=254) String email) {
+        public Request { email=normalized(email); }
         @Override public String toString(){return "Request[REDACTED]";}
     }
+    @Schema(name="EmailVerificationConfirmation")
     public record Confirm(
         @NotBlank @Email @Pattern(regexp="^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$") @Size(max=254) String email,
         @NotBlank @Pattern(regexp="[0-9a-f-]{36}") String challengeId,
         @NotBlank @Pattern(regexp="[0-9]{6}") @Schema(accessMode=Schema.AccessMode.WRITE_ONLY) String code) {
+        public Confirm { email=normalized(email); }
         @Override public String toString(){return "Confirm[REDACTED]";}
     }
     private final EmailVerificationService service;
@@ -33,4 +37,5 @@ public class EmailVerificationController {
     @PostMapping("/confirmation")
     @Operation(summary="이메일 인증번호 확인",description="오답5회 제한. 성공 증명은10분 유효하며 동일 이메일의 가입에서 한 번만 사용합니다.")
     public EmailVerificationService.Verified confirm(@Valid @RequestBody Confirm input){return service.confirm(input.email(),input.challengeId(),input.code());}
+    private static String normalized(String email){return email==null?null:email.strip().toLowerCase(java.util.Locale.ROOT);}
 }

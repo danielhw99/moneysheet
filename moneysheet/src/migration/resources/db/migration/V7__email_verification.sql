@@ -18,4 +18,4 @@ CREATE TABLE email_verifications (
     KEY ix_email_verifications_sent(sent_at),
     CONSTRAINT ck_email_verification_requests CHECK(request_count BETWEEN 0 AND 10),
     CONSTRAINT ck_email_verification_attempts CHECK(attempts BETWEEN 0 AND 5)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;

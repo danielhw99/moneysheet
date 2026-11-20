@@ -10,6 +10,6 @@ Spring Boot Mail (`JavaMailSender`) sends through the configured SMTP server. Se
 - Codes use salted Argon2 hashes; proofs are random256-bit values stored only as SHA256. Metadata older than24 hours is purged hourly; account deletion immediately deletes that email's row. Verification data is separate from financial data.
 - Confirmation failures commit their attempt count. SMTP failures roll back challenge changes and return sanitized INTERNAL_ERROR/HTTP500. Unknown/expired/exhausted codes and invalid/consumed proofs use VALIDATION/400; existing email409; rate limit429 with Retry-After. No password recovery endpoint is introduced.
 
-V7 is versioned SQL. Applying it to an existing DB requires the normal backup, schema/version check and explicit migration procedure. Application boot never migrates automatically. The PR does not apply V7 to the development database.
+V7 is versioned SQL. Applying it to an existing DB requires the normal backup, schema/version check and explicit migration procedure. Pause public signup during migration and deploy the new FE/BE together; do not run an older signup service against V7. Application boot never migrates automatically. The PR does not apply V7 to the development database.
 
 Validation uses a test-only in-memory mailbox; no real mail is sent by automated tests. Actual SMTP delivery, spam-folder behavior and sender authentication must be checked separately after private configuration. Fake delivery is never enabled in the application runtime.

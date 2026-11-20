@@ -120,6 +120,15 @@ class AuthIntegrationTest {
   assertThat(jdbc.queryForObject("SELECT consumed FROM email_verifications WHERE email_key=?",Boolean.class,email)).isTrue();
  }
 
+ @Test void distinctEmailKeysNeverShareAProofThroughDatabaseCollation() {
+  String first="cafe@example.com",second="caf\u00e9@example.com";
+  String token=proof(first);
+  verification.request(second);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM email_verifications WHERE email_key IN (?,?)",Integer.class,first,second)).isEqualTo(2);
+  assertThatThrownBy(()->verification.consume(second,token)).isInstanceOf(ApiException.class);
+  signup.signup(new SignupInput(first,"N","a unique long password!","v1",true,token));
+ }
+
  @Test void signupLoginOwnProfileAndLogoutAgainstRealMysql() throws Exception {
   var csrf=mvc.perform(get("/api/v1/auth/csrf")).andExpect(status().isOk()).andReturn();
   var session=(MockHttpSession)csrf.getRequest().getSession(false);
@@ -152,8 +161,9 @@ class AuthIntegrationTest {
   try(var executor=Executors.newFixedThreadPool(2)) {
    var one=executor.submit(action);var two=executor.submit(action);start.countDown();
    var outcomes=List.of(one.get(30,TimeUnit.SECONDS),two.get(30,TimeUnit.SECONDS));
-   assertThat(outcomes).containsOnly("created",ErrorCode.EMAIL_ALREADY_EXISTS.name(),ErrorCode.VALIDATION.name());
    assertThat(outcomes.stream().filter("created"::equals).count()).isEqualTo(1);
+   assertThat(outcomes.stream().filter(value->!value.equals("created")).toList()).singleElement()
+    .isIn(ErrorCode.EMAIL_ALREADY_EXISTS.name(),ErrorCode.VALIDATION.name());
   }
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE email_key='race@example.com'",Long.class)).isEqualTo(1);
  }

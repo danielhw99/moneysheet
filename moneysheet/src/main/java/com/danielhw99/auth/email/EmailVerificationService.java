@@ -21,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EmailVerificationService {
+    @io.swagger.v3.oas.annotations.media.Schema(name="EmailVerificationSent")
     public record Sent(String challengeId,java.time.Instant expiresAt,int resendAfterSeconds) { }
+    @io.swagger.v3.oas.annotations.media.Schema(name="EmailVerificationConfirmed")
     public record Verified(String verificationToken,java.time.Instant expiresAt) {
         @Override public String toString(){return "Verified[REDACTED]";}
     }
