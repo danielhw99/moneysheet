@@ -46,6 +46,18 @@ class EmailVerificationServiceTest {
         clock.advance(600);
         invalid(() -> service.consume(email,proof.verificationToken()));
     }
+    @Test void reconfirmationRevokesUnexpiredProofAndOnlyLatestCanBeConsumedOnce() {
+        var sent=service.request(email);
+        var first=service.confirm(email,sent.challengeId(),code);
+        clock.advance(30);
+        var latest=service.confirm(email,sent.challengeId(),code);
+        assertThat(clock.instant()).isBefore(first.expiresAt());
+        assertThat(latest.verificationToken()).isNotEqualTo(first.verificationToken());
+        assertThat(latest.expiresAt()).isEqualTo(clock.instant().plusSeconds(600));
+        invalid(() -> service.consume(email,first.verificationToken()));
+        service.consume(email,latest.verificationToken());
+        invalid(() -> service.consume(email,latest.verificationToken()));
+    }
     @Test void fiveWrongCodesPersistentlyExhaustTheChallenge() {
         var sent=service.request(email);
         String wrong=code.equals("000000")?"000001":"000000";

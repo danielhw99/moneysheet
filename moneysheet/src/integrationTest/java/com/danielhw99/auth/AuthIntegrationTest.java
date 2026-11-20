@@ -129,6 +129,20 @@ class AuthIntegrationTest {
   signup.signup(new SignupInput(first,"N","a unique long password!","v1",true,token));
  }
 
+ @Test void reconfirmationCommitsProofReplacementBeforeSignup() {
+  String email="reconfirm@example.com";
+  var sent=verification.request(email);
+  var first=verification.confirm(email,sent.challengeId(),mailbox.codes.get(email));
+  var latest=verification.confirm(email,sent.challengeId(),mailbox.codes.get(email));
+  assertThat(latest.verificationToken()).isNotEqualTo(first.verificationToken());
+  assertThatThrownBy(()->signup.signup(new SignupInput(email,"N","a unique long password!","v1",true,first.verificationToken())))
+   .isInstanceOfSatisfying(ApiException.class,e->assertThat(e.getErrorCode()).isEqualTo(ErrorCode.VALIDATION));
+  assertThat(users.existsByEmailKey(email)).isFalse();
+  signup.signup(new SignupInput(email,"N","a unique long password!","v1",true,latest.verificationToken()));
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE email_key=?",Integer.class,email)).isEqualTo(1);
+  assertThatThrownBy(()->verification.consume(email,latest.verificationToken())).isInstanceOf(ApiException.class);
+ }
+
  @Test void signupLoginOwnProfileAndLogoutAgainstRealMysql() throws Exception {
   var csrf=mvc.perform(get("/api/v1/auth/csrf")).andExpect(status().isOk()).andReturn();
   var session=(MockHttpSession)csrf.getRequest().getSession(false);

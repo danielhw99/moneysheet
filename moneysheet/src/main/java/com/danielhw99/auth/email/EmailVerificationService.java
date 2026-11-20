@@ -74,6 +74,7 @@ public class EmailVerificationService {
         }
         byte[] bytes=new byte[32];random.nextBytes(bytes);
         String proof=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        // Successful reconfirmation replaces the proof; older tokens are no longer consumable.
         row.proofHash=hash(proof);row.proofExpiresDate=now().plusMinutes(10);
         return new Verified(proof,row.proofExpiresDate.toInstant(ZoneOffset.UTC));
     }
