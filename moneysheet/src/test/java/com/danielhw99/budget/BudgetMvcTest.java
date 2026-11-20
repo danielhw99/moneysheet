@@ -68,7 +68,7 @@ class BudgetMvcTest {
         mvc.perform(put("/api/v1/months/2026-11/budget-setup")
                 .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"items\":[{\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
+                .content("{\"items\":[{\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"enabled\":true,\"paymentMode\":\"threeInstallments\",\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
         verifyNoInteractions(budgets);
     }
@@ -77,7 +77,7 @@ class BudgetMvcTest {
         mvc.perform(put("/api/v1/months/2026-11/budget-setup")
                 .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"items\":[{\"id\":null,\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
+                .content("{\"items\":[{\"id\":null,\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"enabled\":true,\"paymentMode\":\"threeInstallments\",\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
         verify(budgets).setup(eq(7L),
                 eq(YearMonth.of(2026, 11)),
@@ -123,5 +123,28 @@ class BudgetMvcTest {
         session.setAttribute(SessionExpiryFilter.LOGIN_AT, Instant.now());
         session.setAttribute(SessionExpiryFilter.LAST_SEEN, Instant.now());
         return session;
+    }
+
+    @Test void foodInputUsesStrictBooleanAndPaymentModeAndRequiresExplicitChoice() throws Exception {
+        for(String input:List.of(
+            "{\"enabled\":\"false\",\"paymentMode\":\"threeInstallments\",\"weekday\":null,\"saturday\":null,\"sunday\":null}",
+            "{\"enabled\":false,\"paymentMode\":\"MONTH_START\",\"weekday\":null,\"saturday\":null,\"sunday\":null}",
+            "{\"paymentMode\":\"threeInstallments\",\"weekday\":null,\"saturday\":null,\"sunday\":null}")) {
+            mvc.perform(put("/api/v1/months/2026-11/food-budget").session(session(7L))
+                .with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON).content(input))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
+        }
+        verifyNoInteractions(budgets);
+    }
+    @Test void foodModeUsesTheSameLowerCamelCaseValueInRequestsAndResponses() throws Exception {
+        var mode=com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START;
+        when(budgets.updateFood(eq(7L),eq(YearMonth.of(2026,11)),any()))
+            .thenReturn(new BudgetDtos.Summary("2026-11","ready",List.of(),new BudgetDtos.Food(false,mode,null,null,null),0L,new BudgetDtos.FoodSummary(0L,List.of(0L,0L,0L))));
+        mvc.perform(put("/api/v1/months/2026-11/food-budget").session(session(7L))
+            .with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"enabled\":false,\"paymentMode\":\"monthStart\",\"weekday\":null,\"saturday\":null,\"sunday\":null}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.food.enabled").value(false))
+            .andExpect(jsonPath("$.food.paymentMode").value("monthStart"));
+        verify(budgets).updateFood(eq(7L),eq(YearMonth.of(2026,11)),argThat(food->food.paymentMode()==mode&&!food.enabled()));
     }
 }

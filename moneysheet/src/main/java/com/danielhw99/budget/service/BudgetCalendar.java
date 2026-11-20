@@ -41,6 +41,13 @@ public class BudgetCalendar {
         return List.of(totals[0], totals[1], totals[2]);
     }
 
+    public List<Long> foodInstallments(YearMonth month,boolean enabled,com.danielhw99.budget.entity.FoodPaymentMode mode,Long weekday,Long saturday,Long sunday) {
+        if(!enabled) return List.of(0L,0L,0L);
+        var totals=foodInstallments(month,weekday,saturday,sunday);
+        if(mode==com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START) return List.of(safeAdd(safeAdd(totals.get(0),totals.get(1)),totals.get(2)),0L,0L);
+        return totals;
+    }
+
     public long safeAdd(long left, long right) {
         try {
             long result = Math.addExact(left, right);
