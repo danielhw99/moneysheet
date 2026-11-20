@@ -10,7 +10,14 @@ public final class BudgetDtos {
     private BudgetDtos() {}
 
 
-    public record Food(Long weekday, Long saturday, Long sunday) {}
+    public record Food(
+            @JsonProperty(required=true) @Schema(nullable=true,description="NULL은 미선택 DRAFT 응답에서만 허용. 쓰기는 true/false 필수") Boolean enabled,
+            @JsonProperty(required=true) @Schema(requiredMode=Schema.RequiredMode.REQUIRED) com.danielhw99.budget.entity.FoodPaymentMode paymentMode,
+            @JsonProperty(required=true) @Schema(nullable=true,minimum="1",maximum="9999999999") Long weekday,
+            @JsonProperty(required=true) @Schema(nullable=true,minimum="1",maximum="9999999999") Long saturday,
+            @JsonProperty(required=true) @Schema(nullable=true,minimum="1",maximum="9999999999") Long sunday) {
+        public Food(Long weekday, Long saturday, Long sunday) { this(true,com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS,weekday,saturday,sunday); }
+    }
     public record ItemInput(String name, @Schema(nullable = true) ApiId categoryId, Long amount) {}
     public record SetupItem(
             @JsonProperty(required = true)

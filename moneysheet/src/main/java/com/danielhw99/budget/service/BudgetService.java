@@ -69,6 +69,7 @@ public class BudgetService {
                 previous.map(MonthlyBudget::getFoodWeekday).orElse(null),
                 previous.map(MonthlyBudget::getFoodSaturday).orElse(null),
                 previous.map(MonthlyBudget::getFoodSunday).orElse(null)));
+        previous.ifPresent(budget::copyFoodSettings);
         if (previous.isPresent()) {
             for (var item : items.findByMonthlyBudget_IdOrderByIdAsc(previous.get().getId())) {
                 items.save(new FixedBudgetItem(budget, item.getCategory(), item.getName(), item.getAmount()));
@@ -85,7 +86,7 @@ public class BudgetService {
                     categoryId(item), item.getAmount()));
         }
         return new Preparation(ApiFormats.formatMonth(month), budget.getSetupStatus() == BudgetSetupStatus.READY ? "ready" : "draft",
-                source, draftItems, new Food(budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday()));
+                source, draftItems, new Food(budget.getFoodEnabled(),budget.getFoodPaymentMode(),budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday()));
     }
 
 
@@ -106,7 +107,7 @@ public class BudgetService {
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
         if (budget.getSetupStatus() != BudgetSetupStatus.DRAFT) throw new ApiException(ErrorCode.CONFLICT);
         if (input == null || input.items() == null) throw new ApiException(ErrorCode.VALIDATION);
-        validateFood(input.food());
+        validateFood(input.food(),budget,"food.");
         Map<Long, FixedBudgetItem> existing = items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())
                 .stream().collect(Collectors.toMap(FixedBudgetItem::getId, Function.identity()));
         var seenIds = new HashSet<Long>();
@@ -134,7 +135,8 @@ public class BudgetService {
                 existing.get(item.id().value()).update(category, item.name().strip(), item.amount());
             }
         }
-        budget.finishSetup(input.food().weekday(), input.food().saturday(), input.food().sunday());
+        applyFood(budget,input.food());
+        budget.finishSetup();
         items.flush();
         return summary(budget, month);
     }
@@ -150,8 +152,8 @@ public class BudgetService {
                     categoryId(item), item.getAmount(), paid,
                     item.getAmount() - paid, paid == item.getAmount()));
         }
-        Food food = new Food(budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday());
-        var installments = calendar.foodInstallments(month, food.weekday(), food.saturday(), food.sunday());
+        Food food = new Food(budget.getFoodEnabled(),budget.getFoodPaymentMode(),budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday());
+        var installments = calendar.foodInstallments(month, Boolean.TRUE.equals(food.enabled()), food.paymentMode(), food.weekday(), food.saturday(), food.sunday());
         long total = calendar.safeAdd(calendar.safeAdd(installments.get(0), installments.get(1)), installments.get(2));
         return new Summary(ApiFormats.formatMonth(month), "ready", result, food,
                 fixedTotal, new FoodSummary(total, installments));
@@ -161,9 +163,21 @@ public class BudgetService {
         if (budget.getSetupStatus() != BudgetSetupStatus.READY) throw new ApiException(ErrorCode.BUDGET_NOT_READY);
     }
 
-    private void validateFood(Food food) {
-        if (food == null || !validAmount(food.weekday()) || !validAmount(food.saturday()) || !validAmount(food.sunday()))
-            throw new ApiException(ErrorCode.VALIDATION);
+    private void validateFood(Food food, MonthlyBudget budget,String prefix) {
+        if(food==null) throw new ApiException(ErrorCode.VALIDATION,prefix.isEmpty()?"food":prefix.substring(0,prefix.length()-1),"식비 설정을 입력해 주세요.");
+        if(food.enabled()==null) throw new ApiException(ErrorCode.VALIDATION,prefix+"enabled","식비 사용 여부를 선택해 주세요.");
+        if(food.paymentMode()==null) throw new ApiException(ErrorCode.VALIDATION,prefix+"paymentMode","지급 방식을 선택해 주세요.");
+        if(food.enabled()) {
+            if(!validAmount(food.weekday())) throw new ApiException(ErrorCode.VALIDATION,prefix+"weekday","주중 식비를 1원 이상 입력해 주세요.");
+            if(!validAmount(food.saturday())) throw new ApiException(ErrorCode.VALIDATION,prefix+"saturday","토요일 식비를 1원 이상 입력해 주세요.");
+            if(!validAmount(food.sunday())) throw new ApiException(ErrorCode.VALIDATION,prefix+"sunday","일요일 식비를 1원 이상 입력해 주세요.");
+        } else {
+            if(food.weekday()!=null||food.saturday()!=null||food.sunday()!=null) throw new ApiException(ErrorCode.VALIDATION,prefix+"weekday","OFF에서는 금액을 변경할 수 없어요.");
+            if(food.paymentMode()!=budget.getFoodPaymentMode())throw new ApiException(ErrorCode.VALIDATION,prefix+"paymentMode","OFF에서는 지급 방식을 변경할 수 없어요.");
+        }
+    }
+    private void applyFood(MonthlyBudget budget,Food food) {
+        budget.configureFood(food.enabled(),food.paymentMode(),food.weekday(),food.saturday(),food.sunday());
     }
 
     private void validateItem(String name, ApiId categoryId, Long amount) {
@@ -185,8 +199,8 @@ public class BudgetService {
     @Transactional
     public Summary updateFood(Long userId, YearMonth month, Food food) {
         MonthlyBudget budget = writableReady(userId, month);
-        validateFood(food);
-        budget.updateFood(food.weekday(), food.saturday(), food.sunday());
+        validateFood(food,budget,"");
+        applyFood(budget,food);
         return summary(budget, month);
     }
 

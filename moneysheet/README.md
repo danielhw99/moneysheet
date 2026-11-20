@@ -412,3 +412,10 @@ local Swagger UI:
 - 사용자 행 잠금 아래 원장 생성과 요청 메타데이터를 같은 트랜잭션으로 저장합니다. 세션 버전·CSRF·소유권 검사를 유지합니다. 실패는 함께 롤백하고 탈퇴 시 이력도 삭제합니다. 원문/응답 스냅샷은 저장하지 않고 해시·작업·월·생성ID만 보관하며 자동 만료하지 않습니다.
 - **V6__idempotent_writes.sql**이 필요합니다. V1~V5는 수정하지 않았으며, 이번 PR에서 기존 개발 DB에V6를 적용하지 않습니다. 병합 후 별도 승인·백업·명시적 마이그레이션·검증 절차로 적용해야 합니다. 일반 앱 시작은DB 변경을 실행하지 않습니다.
 - 검증: 기존 빠른 테스트와 IdempotentWritesTest, 실제 MySQL IdempotencyIntegrationTest의5개 생성 경로·동시 요청·충돌·수정/삭제·롤백·탈퇴 정리를 확인합니다. 실제 응답 유실 브라우저 회귀는 FE #43과 함께 격리 환경에서 수행합니다.
+
+## 식비 선택 사용·지급 방식 (#45)
+- 월 예산의 food에 enabled·paymentMode(threeInstallments/monthStart)를 추가합니다. 금액 필드는 유지하며 OFF에도 응답에 저장값을 반환합니다.
+- food-budget PUT과 budget-setup food 입력에 두 필드를 명시합니다. ON은 양수3종 필수, OFF는 금액3종NULL·기존 mode로 보내면 저장 금액을 보존합니다.
+- 초기 DRAFT의 enabled=NULL은 미선택입니다. OFF는 식비 없이 READY 가능하며 다시 ON할 때 유효한 금액을 함께 저장해야 합니다.
+- 현재 월 전체 계산을 갱신하고 지난 월은 변경하지 않습니다. 일괄 지급도 여유비에는 당일 식비만 반영합니다.
+- V8__food_settings.sql 신규 migration이 필요합니다. 기존 계정·월은 ON/3회로 전환하며 기존 DRAFT 미입력은 미선택으로 둡니다. 실제 개발 DB 적용은 별도 백업·승인 후 진행합니다.

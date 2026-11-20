@@ -42,6 +42,24 @@ public class MonthlyBudget extends BaseEntity {
     @Column(name = "food_sunday", nullable = true)
     private Long foodSunday;
 
+    @Column(name="food_enabled")
+    private Boolean foodEnabled;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name="food_payment_mode",nullable=false,length=20)
+    private FoodPaymentMode foodPaymentMode=FoodPaymentMode.THREE_INSTALLMENTS;
+
+    public Boolean getFoodEnabled() { return foodEnabled; }
+    public FoodPaymentMode getFoodPaymentMode() { return foodPaymentMode; }
+    public void copyFoodSettings(MonthlyBudget source) {
+        foodEnabled=source.foodEnabled; foodPaymentMode=source.foodPaymentMode;
+    }
+    public void configureFood(boolean enabled, FoodPaymentMode mode, Long weekday, Long saturday, Long sunday) {
+        foodEnabled=enabled; foodPaymentMode=mode;
+        if(enabled) { foodWeekday=weekday;foodSaturday=saturday;foodSunday=sunday; }
+    }
+    public void finishSetup() { setupStatus=BudgetSetupStatus.READY; }
+
     protected MonthlyBudget() {
     }
 
@@ -58,6 +76,7 @@ public class MonthlyBudget extends BaseEntity {
         this.foodWeekday = foodWeekday;
         this.foodSaturday = foodSaturday;
         this.foodSunday = foodSunday;
+        this.foodEnabled = foodWeekday!=null && foodSaturday!=null && foodSunday!=null ? true : null;
     }
 
     public User getUser() {
@@ -86,6 +105,7 @@ public class MonthlyBudget extends BaseEntity {
 
     public void finishSetup(long weekday, long saturday, long sunday) {
         updateFood(weekday, saturday, sunday);
+        foodEnabled=true;
         setupStatus = BudgetSetupStatus.READY;
     }
 
