@@ -130,7 +130,12 @@ class AvatarIntegrationTest {
     @Test void imageAndProfileChangesRollBackTogetherAndAccountDeletionCascades() throws Exception {
         var owner=user();var other=user();var file=photo();avatars.save(owner.getId(),file);avatars.save(other.getId(),file);
         String version=users.findById(owner.getId()).orElseThrow().getAvatarVersion();byte[] before=avatars.read(owner.getId());
-        new TransactionTemplate(transactions).executeWithoutResult(status->{avatars.save(owner.getId(),file);status.setRollbackOnly();});
+        var replacement=photo(java.awt.Color.RED);
+        new TransactionTemplate(transactions).executeWithoutResult(status->{
+            avatars.save(owner.getId(),replacement);
+            assertThat(avatars.read(owner.getId())).isNotEqualTo(before);
+            status.setRollbackOnly();
+        });
         assertThat(users.findById(owner.getId()).orElseThrow().getAvatarVersion()).isEqualTo(version);
         assertThat(avatars.read(owner.getId())).isEqualTo(before);
         new TransactionTemplate(transactions).executeWithoutResult(status->{avatars.delete(owner.getId());status.setRollbackOnly();});
