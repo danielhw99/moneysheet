@@ -421,3 +421,11 @@ local Swagger UI:
 - 초기 DRAFT의 enabled=NULL은 미선택입니다. OFF는 식비 없이 READY 가능하며 다시 ON할 때 유효한 금액을 함께 저장해야 합니다.
 - 현재 월 전체 계산을 갱신하고 지난 월은 변경하지 않습니다. 일괄 지급도 여유비에는 당일 식비만 반영합니다.
 - V8__food_settings.sql 신규 migration이 필요합니다. 기존 계정·월은 ON/3회로 전환하며 기존 DRAFT 미입력은 미선택으로 둡니다. 실제 개발 DB 적용은 별도 백업·승인 후 진행합니다.
+
+## 프로필 사진 API (V9)
+
+`GET/PUT/DELETE /api/v1/me/avatar`는 본인 전용입니다. PUT은 CSRF + multipart `file`(JPEG/PNG 최대5MiB), 성공 시 갱신 Profile을 반환합니다. GET은256×256 JPEG·no-store/nosniff이며 사진 없음은404입니다. DELETE는 사진 없음도200 Profile(avatarUrl=null)입니다. 기존204 삭제와 구분합니다. Profile의 avatarUrl은 버전이 붙은 본인 상대 URL이며 사진 변경은 로그인 세션을 유지합니다.
+
+서버가 실제 이미지 형식·해상도(최대변8192px/24MP)를 검사하고 중앙 정사각형 JPEG로 재인코딩합니다. 원본·파일명·메타데이터는 저장하지 않습니다. 입력5MiB/요청6MiB 제한 초과는413 VALIDATION/file, 잘못된 이미지는400 VALIDATION/file입니다. 동시 정규화는2개로 제한하고 초과는429/Retry-After입니다.
+
+V9는 users.avatar_version과 user_profile_images(BLOB)를 추가합니다. 원장·예산 데이터는 변경하지 않습니다. 사진과 버전은 같은 트랜잭션으로 갱신하고 회원 탈퇴 시 사진도 삭제됩니다. 새 스키마가 필요하므로 배포 순서는 백업 → 명시적 V9 적용 → BE → FE입니다. 일반 앱 실행은 migration을 수행하지 않습니다. 이번 구현 검증은 격리 MySQL을 사용하며 실제 개발 DB V9는 적용하지 않았습니다.

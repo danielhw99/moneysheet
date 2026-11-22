@@ -33,6 +33,12 @@ public class User extends BaseEntity {
     @Column(name = "session_version", nullable = false)
     private long sessionVersion;
 
+    @Column(name = "avatar_version", length = 32)
+    private String avatarVersion;
+
+    public String getAvatarVersion() { return avatarVersion; }
+    public void setAvatarVersion(String version) { avatarVersion = version; }
+
     @Column(name="email_verified",nullable=false)
     private boolean emailVerified;
     public boolean isEmailVerified(){return emailVerified;}

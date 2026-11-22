@@ -3,6 +3,9 @@ package com.danielhw99.common.error;
 import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.stream.Stream;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import com.danielhw99.common.web.TraceIdFilter;
 
@@ -59,6 +62,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 HttpHeaders.EMPTY, List.of(), request);
     }
 
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<Object> handleMultipart(MultipartException exception, HttpServletRequest request) {
+        return errorResponse(ErrorCode.VALIDATION, org.springframework.http.HttpStatus.BAD_REQUEST,
+                HttpHeaders.EMPTY, List.of(new ApiFieldError("file", "이미지 파일 요청을 확인해 주세요.")), request);
+    }
+
     @Override
     protected @Nullable ResponseEntity<Object> handleExceptionInternal(Exception exception, @Nullable Object body,
             HttpHeaders headers, HttpStatusCode status, WebRequest webRequest) {
@@ -97,6 +106,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     private List<ApiFieldError> fieldErrors(Exception exception) {
+        if (exception instanceof MaxUploadSizeExceededException) {
+            return List.of(new ApiFieldError("file", "사진은 5MiB 이하로 선택해 주세요."));
+        }
+        if (exception instanceof MissingServletRequestPartException missing) {
+            return List.of(new ApiFieldError(missing.getRequestPartName(), "이미지 파일을 선택해 주세요."));
+        }
         if (exception instanceof MethodArgumentNotValidException invalid) {
             return invalid.getBindingResult().getFieldErrors().stream()
                     .map(error -> new ApiFieldError(error.getField(), "입력값을 확인해주세요."))
