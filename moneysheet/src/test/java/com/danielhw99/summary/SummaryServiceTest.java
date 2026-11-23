@@ -31,7 +31,7 @@ class SummaryServiceTest {
     final YearMonth month=YearMonth.of(2026,11);
     void ready(YearMonth selected) {
         var budget=mock(MonthlyBudget.class);when(budget.getId()).thenReturn(51L);when(budget.getSetupStatus()).thenReturn(BudgetSetupStatus.READY);
-        when(budget.getFoodEnabled()).thenReturn(true);when(budget.getFoodPaymentMode()).thenReturn(com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS);
+        when(budget.getFoodPaymentMode()).thenReturn(com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS);
         when(budget.getFoodWeekday()).thenReturn(11000L);when(budget.getFoodSaturday()).thenReturn(11000L);when(budget.getFoodSunday()).thenReturn(11000L);
         when(budgets.findByUser_IdAndMonthStart(1L,selected.atDay(1))).thenReturn(Optional.of(budget));
         when(queries.ledger(51L)).thenReturn(Ledger.empty());when(queries.totals(51L)).thenReturn(new SummaryQueries.Totals(BigDecimal.valueOf(650000),BigDecimal.valueOf(4000000),BigDecimal.valueOf(100000)));

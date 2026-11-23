@@ -68,7 +68,7 @@ class BudgetMvcTest {
         mvc.perform(put("/api/v1/months/2026-11/budget-setup")
                 .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"items\":[{\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"enabled\":true,\"paymentMode\":\"threeInstallments\",\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
+                .content("{\"items\":[{\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"paymentMode\":\"threeInstallments\",\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
         verifyNoInteractions(budgets);
     }
@@ -77,7 +77,7 @@ class BudgetMvcTest {
         mvc.perform(put("/api/v1/months/2026-11/budget-setup")
                 .session(session(7L)).with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"items\":[{\"id\":null,\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"enabled\":true,\"paymentMode\":\"threeInstallments\",\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
+                .content("{\"items\":[{\"id\":null,\"name\":\"Rent\",\"categoryId\":\"1\",\"amount\":100}],\"food\":{\"paymentMode\":\"threeInstallments\",\"weekday\":1,\"saturday\":1,\"sunday\":1}}"))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
         verify(budgets).setup(eq(7L),
                 eq(YearMonth.of(2026, 11)),
@@ -139,12 +139,25 @@ class BudgetMvcTest {
     @Test void foodModeUsesTheSameLowerCamelCaseValueInRequestsAndResponses() throws Exception {
         var mode=com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START;
         when(budgets.updateFood(eq(7L),eq(YearMonth.of(2026,11)),any()))
-            .thenReturn(new BudgetDtos.Summary("2026-11","ready",List.of(),new BudgetDtos.Food(false,mode,null,null,null),0L,new BudgetDtos.FoodSummary(0L,List.of(0L,0L,0L))));
+            .thenReturn(new BudgetDtos.Summary("2026-11","ready",List.of(),new BudgetDtos.Food(mode,1L,1L,1L),0L,new BudgetDtos.FoodSummary(30L,List.of(30L,0L,0L))));
         mvc.perform(put("/api/v1/months/2026-11/food-budget").session(session(7L))
             .with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON)
-            .content("{\"enabled\":false,\"paymentMode\":\"monthStart\",\"weekday\":null,\"saturday\":null,\"sunday\":null}"))
-            .andExpect(status().isOk()).andExpect(jsonPath("$.food.enabled").value(false))
+            .content("{\"paymentMode\":\"monthStart\",\"weekday\":1,\"saturday\":1,\"sunday\":1}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.food.enabled").doesNotExist())
             .andExpect(jsonPath("$.food.paymentMode").value("monthStart"));
-        verify(budgets).updateFood(eq(7L),eq(YearMonth.of(2026,11)),argThat(food->food.paymentMode()==mode&&!food.enabled()));
+        verify(budgets).updateFood(eq(7L),eq(YearMonth.of(2026,11)),argThat(food->food.paymentMode()==mode&&food.weekday()==1L));
     }
+    @Test void foodAmountTypesAndRangesAreRejectedBeforeService() throws Exception {
+        for(String value:List.of("null","0","-1","1.5","true","\"11000\"","10000000000")) {
+            String food="{\"paymentMode\":\"monthStart\",\"weekday\":"+value+",\"saturday\":1,\"sunday\":1}";
+            for(String endpoint:List.of("food-budget","budget-setup")) {
+                String body=endpoint.equals("food-budget")?food:"{\"items\":[],\"food\":"+food+"}";
+                mvc.perform(put("/api/v1/months/2026-11/"+endpoint).session(session(7L))
+                    .with(SecurityMockMvcRequestPostProcessors.csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
+            }
+        }
+        verifyNoInteractions(budgets);
+    }
+
 }

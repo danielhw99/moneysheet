@@ -77,5 +77,5 @@ public class SummaryService {
         if(budget.getSetupStatus()!=BudgetSetupStatus.READY) throw new ApiException(ErrorCode.BUDGET_NOT_READY);
         return budget;
     }
-    private Food food(MonthlyBudget budget) { return new Food(Boolean.TRUE.equals(budget.getFoodEnabled()),budget.getFoodPaymentMode(),budget.getFoodWeekday(),budget.getFoodSaturday(),budget.getFoodSunday()); }
+    private Food food(MonthlyBudget budget) { return new Food(budget.getFoodPaymentMode(),budget.getFoodWeekday(),budget.getFoodSaturday(),budget.getFoodSunday()); }
 }

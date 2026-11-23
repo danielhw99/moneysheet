@@ -7,8 +7,8 @@ import java.util.Map;
 
 public final class SummaryFacts {
     private SummaryFacts() {}
-    public record Food(boolean enabled,com.danielhw99.budget.entity.FoodPaymentMode paymentMode,Long weekday,Long saturday,Long sunday) {
-        public Food(long weekday,long saturday,long sunday) { this(true,com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS,weekday,saturday,sunday); }
+    public record Food(com.danielhw99.budget.entity.FoodPaymentMode paymentMode,Long weekday,Long saturday,Long sunday) {
+        public Food(long weekday,long saturday,long sunday) { this(com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS,weekday,saturday,sunday); }
     }
     public record Amounts(BigDecimal expense, BigDecimal income) {
         public static Amounts zero() { return new Amounts(BigDecimal.ZERO, BigDecimal.ZERO); }

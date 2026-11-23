@@ -26,25 +26,25 @@ class SummaryCalculatorTest {
         var date=month.atDay(1);var facts=new Ledger(Map.of(date,new Amounts(amount(9000),amount(50000))),Map.of(date,amount(100000)),List.of());
         var day=calculator.daily(date,uniform,facts);
         assertThat(day.carryoverFreeBalance()).isZero();assertThat(day.availableBeforeSpending()).isEqualTo(11000);
-        assertThat(day.freeBalance()).isEqualTo(52000);assertThat(day.remainingFood()).isEqualTo(110000);
-        assertThat(day.mainBalance()).isEqualTo(162000);assertThat(day.incomeTotal()).isEqualTo(50000);
+        assertThat(day.freeBalance()).isEqualTo(52000);assertThat(day.remainingFood()).isEqualTo(99000);
+        assertThat(day.mainBalance()).isEqualTo(151000);assertThat(day.incomeTotal()).isEqualTo(50000);
     }
     @Test void nextDayCarriesSameMonthFreeBalanceIncludingDailyIncomeWithoutDuplicatingItInMain() {
         var facts=new Ledger(Map.of(month.atDay(1),new Amounts(amount(9000),amount(50000)),month.atDay(2),new Amounts(amount(22000),amount(2000)),month.minusMonths(1).atEndOfMonth(),new Amounts(amount(999999),amount(999999))),Map.of(),List.of());
         var day=calculator.daily(month.atDay(2),uniform,facts);
         assertThat(day.carryoverFreeBalance()).isEqualTo(52000);assertThat(day.freeBalance()).isEqualTo(43000);
         assertThat(day.expenseTotal()).isEqualTo(22000);assertThat(day.incomeTotal()).isEqualTo(2000);
-        assertThat(day.mainBalance()).isEqualTo(43000+99000);
+        assertThat(day.mainBalance()).isEqualTo(43000+88000);
     }
     @Test void installmentEndsAndNewInstallmentsHaveNoDuplicateAllocation() {
-        for(int value:new int[]{11,21,month.lengthOfMonth()}) assertThat(calculator.daily(month.atDay(value),uniform,Ledger.empty()).remainingFood()).isZero();
-        assertThat(calculator.daily(month.atDay(12),uniform,Ledger.empty()).remainingFood()).isEqualTo(9*11000);
-        assertThat(calculator.daily(month.atDay(22),uniform,Ledger.empty()).remainingFood()).isEqualTo(8*11000);
-        assertThat(calculator.daily(month.atDay(12),uniform,Ledger.empty()).freeBalance()).isEqualTo(12*11000);
-        assertThat(calculator.daily(month.atDay(11),uniform,Ledger.empty()).mainBalance()).isEqualTo(11*11000);
-        assertThat(calculator.daily(month.atDay(12),uniform,Ledger.empty()).mainBalance()).isEqualTo(21*11000);
-        assertThat(calculator.daily(month.atDay(21),uniform,Ledger.empty()).mainBalance()).isEqualTo(21*11000);
-        assertThat(calculator.daily(month.atDay(22),uniform,Ledger.empty()).mainBalance()).isEqualTo(30*11000);
+        for(int value:new int[]{10,20,month.lengthOfMonth()}) assertThat(calculator.daily(month.atDay(value),uniform,Ledger.empty()).remainingFood()).isZero();
+        for(int value:new int[]{11,21}) assertThat(calculator.daily(month.atDay(value),uniform,Ledger.empty()).remainingFood()).isEqualTo(9*11000);
+        for(int value:new int[]{1,10,11,20,21,30}) {
+            var result=calculator.daily(month.atDay(value),uniform,Ledger.empty());
+            assertThat(result.freeBalance()).isEqualTo(value*11000L);
+            long paid=value<=10?110000:value<=20?220000:330000;
+            assertThat(result.mainBalance()).isEqualTo(paid);
+        }
     }
     @Test void weekdaySaturdaySundayAndAllMonthLengthsIncludingLeapDayAreRespected() {
         Food food=new Food(11000,15000,10000);

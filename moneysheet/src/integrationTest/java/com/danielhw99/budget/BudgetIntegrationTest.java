@@ -90,7 +90,6 @@ class BudgetIntegrationTest {
 
     @Test void v2PreservesLegacyItemsAndPaymentReferences() {
         var legacy = service.get(900001L, YearMonth.of(2020, 1));
-        assertThat(legacy.food().enabled()).isTrue();
         assertThat(legacy.food().paymentMode()).isEqualTo(com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS);
         assertThat(legacy.items()).hasSize(2);
         var pocket = legacy.items().get(0);
@@ -246,42 +245,38 @@ class BudgetIntegrationTest {
                 .extracting("errorCode").isEqualTo(code);
     }
 
-    @Test void foodOffReadyAtomicReenablePreservationAndMonthCopy() {
+    @Test void foodIsRequiredAndFailedUpdatesPreserveTheReadyBudget() {
         var owner=user();var current=month();var id=owner.getId();
-        assertThat(service.prepare(id,current).food().enabled()).isNull();
-        var off=new Food(false,com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS,null,null,null);
-        var saved=service.setup(id,current,new SetupInput(List.of(),off));
-        assertThat(saved.food().enabled()).isFalse();assertThat(saved.food().weekday()).isNull();
-        assertThat(saved.foodSummary().total()).isZero();
-        assertThatThrownBy(()->service.updateFood(id,current,new Food(true,com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START,null,null,null))).isInstanceOf(ApiException.class);
-        assertThat(service.get(id,current).food().enabled()).isFalse();
-        var on=new Food(true,com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START,11000L,15000L,10000L);
-        var enabled=service.updateFood(id,current,on);
-        assertThat(enabled.foodSummary().installments()).containsExactly(enabled.foodSummary().total(),0L,0L);
-        var disabled=service.updateFood(id,current,new Food(false,com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START,null,null,null));
-        assertThat(disabled.food().weekday()).isEqualTo(11000);assertThat(disabled.foodSummary().total()).isZero();
-        assertThat(service.updateFood(id,current,on).food().weekday()).isEqualTo(11000);
-        assertThatThrownBy(()->service.updateFood(id,current.minusMonths(1),off)).isInstanceOf(ApiException.class);
+        assertThat(service.prepare(id,current).food().weekday()).isNull();
+        var missing=new Food(com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS,null,null,null);
+        assertCode(ErrorCode.VALIDATION,()->service.setup(id,current,new SetupInput(List.of(),missing)));
+        assertCode(ErrorCode.BUDGET_NOT_READY,()->service.get(id,current));
+        var saved=service.setup(id,current,new SetupInput(List.of(),new Food(11000L,15000L,10000L)));
+        assertThat(saved.items()).isEmpty();assertThat(saved.foodSummary().total()).isPositive();
+        assertCode(ErrorCode.VALIDATION,()->service.updateFood(id,current,missing));
+        assertThat(service.get(id,current).food().weekday()).isEqualTo(11000);
+        var changed=service.updateFood(id,current,new Food(com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START,11000L,15000L,10000L));
+        assertThat(changed.foodSummary().installments()).containsExactly(changed.foodSummary().total(),0L,0L);
+        assertCode(ErrorCode.BUDGET_READ_ONLY,()->service.updateFood(id,current.minusMonths(1),new Food(1L,1L,1L)));
     }
-    @Test void copiesDisabledPreviousBudgetAmountsAndModeWithoutChangingHistory() {
+    @Test void copiesPreviousAmountsAndPaymentModeAsUnconfirmedDraft() {
         var owner=user();var current=month();
         var previous=new MonthlyBudget(owner,current.minusMonths(1).atDay(1),BudgetSetupStatus.READY,11000L,15000L,10000L);
-        previous.configureFood(false,com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START,null,null,null);
+        previous.configureFood(com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START,11000L,15000L,10000L);
         budgets.saveAndFlush(previous);
         var draft=service.prepare(owner.getId(),current);
-        assertThat(draft.food().enabled()).isFalse();assertThat(draft.food().weekday()).isEqualTo(11000);
+        assertThat(draft.status()).isEqualTo("draft");
+        assertThat(draft.food().weekday()).isEqualTo(11000);
         assertThat(draft.food().paymentMode()).isEqualTo(com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START);
-        assertThat(service.get(owner.getId(),current.minusMonths(1)).food().enabled()).isFalse();
+        assertCode(ErrorCode.BUDGET_NOT_READY,()->service.get(owner.getId(),current));
     }
-    @Test void v8RejectsUnselectedReadyOnWithoutAmountsAndInvalidModesAtDatabaseBoundary() {
+    @Test void v10RejectsInvalidReadyValuesAndRemovedFoodFlag() {
         var owner=user();var current=month();service.prepare(owner.getId(),current);
-        service.setup(owner.getId(),current,new SetupInput(List.of(),new Food(false,com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS,null,null,null)));
-        for(String assignment:List.of("food_enabled=NULL","food_enabled=TRUE","food_enabled=2","food_payment_mode='INVALID'","food_weekday=1")) {
-            assertThatThrownBy(()->jdbc.update("UPDATE monthly_budgets SET "+assignment+" WHERE user_id=?",owner.getId()))
-                .isInstanceOf(org.springframework.dao.DataAccessException.class)
-                .hasRootCauseInstanceOf(java.sql.SQLException.class)
-                .satisfies(error -> assertThat(((java.sql.SQLException)error.getCause()).getErrorCode()).isEqualTo(3819));
+        service.setup(owner.getId(),current,new SetupInput(List.of(),new Food(1L,1L,1L)));
+        for(String assignment:List.of("food_weekday=NULL","food_weekday=0","food_saturday=-1","food_sunday=10000000000","food_payment_mode='INVALID'")) {
+            assertThatThrownBy(()->jdbc.update("UPDATE monthly_budgets SET "+assignment+" WHERE user_id=?",owner.getId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
         }
-        assertThat(service.get(owner.getId(),current).food().enabled()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='monthly_budgets' AND column_name='food_enabled'",Long.class)).isZero();
+        assertThat(service.get(owner.getId(),current).food().weekday()).isEqualTo(1);
     }
 }
