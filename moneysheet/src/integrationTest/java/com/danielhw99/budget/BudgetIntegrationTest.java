@@ -106,6 +106,15 @@ class BudgetIntegrationTest {
         assertThat(payments.findById(900001L)).isPresent();
     }
 
+    @Test void paymentAggregationIsScopedToTheRequestedBudget() {
+        assertThat(payments.sumAmountsByBudgetId(900001L))
+                .hasSize(1).first().satisfies(row -> {
+                    assertThat(row[0]).isEqualTo(900001L);
+                    assertThat(((Number) row[1]).longValue()).isEqualTo(20000L);
+                });
+        assertThat(payments.sumAmountsByBudgetId(-1L)).isEmpty();
+    }
+
     private YearMonth month() { return YearMonth.now(ZoneId.of("Asia/Seoul")); }
 
     private User user() {

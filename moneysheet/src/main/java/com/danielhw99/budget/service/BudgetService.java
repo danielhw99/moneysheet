@@ -144,8 +144,12 @@ public class BudgetService {
     private Summary summary(MonthlyBudget budget, YearMonth month) {
         var result = new ArrayList<ItemSummary>();
         long fixedTotal = 0;
+        Map<Long, Long> paidByItem = new java.util.HashMap<>();
+        for (Object[] row : payments.sumAmountsByBudgetId(budget.getId())) {
+            paidByItem.put((Long) row[0], ((Number) row[1]).longValue());
+        }
         for (var item : items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())) {
-            long paid = payments.sumAmountByItemId(item.getId());
+            long paid = paidByItem.getOrDefault(item.getId(), 0L);
             if (paid > item.getAmount()) throw new ApiException(ErrorCode.AMOUNT_RANGE_EXCEEDED);
             fixedTotal = calendar.safeAdd(fixedTotal, item.getAmount());
             result.add(new ItemSummary(new ApiId(item.getId()), item.getName(),

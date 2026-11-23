@@ -30,8 +30,9 @@ class BudgetUncategorizedTest {
     private final FixedBudgetItemRepository items = mock(FixedBudgetItemRepository.class);
     private final CategoryRepository categories = mock(CategoryRepository.class);
     private final UserRepository users = mock(UserRepository.class);
+    private final FixedPaymentRepository payments = mock(FixedPaymentRepository.class);
     private final BudgetService service = new BudgetService(budgets, items, categories,
-            mock(FixedPaymentRepository.class), users,
+            payments, users,
             new BudgetCalendar(Clock.fixed(Instant.parse("2026-11-19T00:00:00Z"), ZoneOffset.UTC)));
     private final YearMonth month = YearMonth.of(2026, 11);
     private final User owner = mock(User.class);
@@ -65,6 +66,22 @@ class BudgetUncategorizedTest {
         assertThat(result.items().getFirst().categoryId()).isNull();
         assertThat(result.fixedTotal()).isEqualTo(100L);
         assertThat(result.items().getFirst().remaining()).isEqualTo(100L);
+    }
+
+    @Test void summaryDoesNotQueryPaymentTotalsPerItem() {
+        var first = item(budget);
+        var second = item(budget);
+        var third = item(budget);
+        ReflectionTestUtils.setField(second, "id", 22L);
+        ReflectionTestUtils.setField(third, "id", 23L);
+        when(items.findByMonthlyBudget_IdOrderByIdAsc(11L)).thenReturn(List.of(first, second, third));
+        when(payments.sumAmountsByBudgetId(11L)).thenReturn(List.of(new Object[]{21L, 40L}, new Object[]{22L, 100L}));
+        var result = service.get(7L, month);
+        assertThat(result.items()).extracting(BudgetDtos.ItemSummary::paid).containsExactly(40L, 100L, 0L);
+        assertThat(result.items()).extracting(BudgetDtos.ItemSummary::remaining).containsExactly(60L, 0L, 100L);
+        assertThat(result.items()).extracting(BudgetDtos.ItemSummary::complete).containsExactly(false, true, false);
+        verify(payments).sumAmountsByBudgetId(11L);
+        verify(payments, never()).sumAmountByItemId(any());
     }
 
     @Test void preparationCopiesUncategorizedItemIntoIndependentMonth() {
