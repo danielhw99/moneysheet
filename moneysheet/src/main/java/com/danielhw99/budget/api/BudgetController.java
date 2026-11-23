@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.YearMonth;
+import jakarta.validation.Valid;
 
 import com.danielhw99.auth.security.AuthPrincipal;
 import com.danielhw99.budget.service.BudgetService;
@@ -51,7 +52,7 @@ public class BudgetController {
     @PutMapping("/budget-setup")
     public ResponseEntity<BudgetDtos.Summary> setup(@AuthenticationPrincipal AuthPrincipal principal,
                                                      @PathVariable String month,
-                                                     @RequestBody BudgetDtos.SetupInput input) {
+                                                     @Valid @RequestBody BudgetDtos.SetupInput input) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(service.setup(principal.userId(), parseMonth(month), input));
     }
@@ -59,7 +60,7 @@ public class BudgetController {
     @PutMapping("/food-budget")
     public ResponseEntity<BudgetDtos.Summary> updateFood(@AuthenticationPrincipal AuthPrincipal principal,
                                                           @PathVariable String month,
-                                                          @RequestBody BudgetDtos.Food input) {
+                                                          @Valid @RequestBody BudgetDtos.Food input) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(service.updateFood(principal.userId(), parseMonth(month), input));
     }

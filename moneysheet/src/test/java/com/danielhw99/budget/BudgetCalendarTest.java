@@ -26,6 +26,6 @@ class BudgetCalendarTest {
     @Test void installmentTotalsUseActualWeekdaysAndMonthEnd() {
         var calendar = new BudgetCalendar(Clock.systemUTC());
         assertThat(calendar.foodInstallments(YearMonth.of(2026, 2), 10, 20, 30))
-                .containsExactly(160L, 140L, 100L);
+                .containsExactly(150L, 130L, 120L);
     }
 }

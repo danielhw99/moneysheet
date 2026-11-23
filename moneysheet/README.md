@@ -383,9 +383,9 @@ local Swagger UI:
 - `GET /api/v1/summaries/daily?date=yyyy-MM-dd`, `monthly?month=yyyy-MM`, `home?month=yyyy-MM`. 인증된 사용자 소유의 READY 예산만 읽습니다. GET으로 예산/기록을 생성하지 않으며 응답은 DTO 직접 반환 및 no-store입니다.
 - 월1일 기초 여유비0. 오늘 마감 여유비=전날 마감+오늘 적용 식비−오늘 본인 지출+오늘 Daily 일반 입금입니다. 메모·고정비 지급·Monthly 수익/지출은 여유비에 영향이 없습니다.
 - Main=오늘 마감 여유비+남은 식비(remainingFood)+조회일 활성 메모의 부호 합계입니다. 일반 입금은 여유비에 누적되므로 Main에서 다시 더하지 않습니다.
-- 식비 ON일 때 공휴일과 관계없이 주중/토/일 설정을 사용합니다. THREE_INSTALLMENTS(threeInstallments)는1~11일/12~21일/22~월말로 나누며, remainingFood는 조회일 다음 날부터 해당 회차 마지막 날까지 합산합니다. 이 방식에서만 11일·21일·월말에 남은 회차 식비가0입니다.
-- MONTH_START(monthStart)는1일에 월 식비 전액을 반영하며, remainingFood는 조회일 다음 날부터 월말까지 합산합니다. 11일·21일에도 이후 식비가 남고 월말에0이 됩니다. 지급 방식과 관계없이 여유비에는 당일 식비만 반영합니다.
-- 식비 OFF이면 적용 식비와 remainingFood는0이며 저장된 식비 설정은 보존합니다. 월별 잔액·메모 이월이나 고정여유비 자동 지급은 없습니다.
+- 식비는 필수이며 공휴일과 관계없이 주중/토/일 설정을 사용합니다. THREE_INSTALLMENTS(threeInstallments)는1~10일/11~20일/21~월말로 나누며, remainingFood는 조회일 다음 날부터 해당 회차 마지막 날까지 합산합니다. 이 방식에서만 10일·20일·월말에 남은 회차 식비가0입니다.
+- MONTH_START(monthStart)는1일에 월 식비 전액을 반영하며, remainingFood는 조회일 다음 날부터 월말까지 합산합니다. 10일·20일에도 이후 식비가 남고 월말에0이 됩니다. 지급 방식과 관계없이 여유비에는 당일 식비만 반영합니다.
+- 식비 OFF 기능은 없습니다. DRAFT는 식비 미입력을 허용하고 READY는 주중·토·일 식비1~9,999,999,999원과 지급 방식이 필수입니다. 월별 잔액·메모 이월이나 고정여유비 자동 지급은 없습니다.
 - 메모는 발생일≤조회일이고 완료일이 없거나 완료일>조회일일 때 활성입니다. 완료일 당일부터 Main에서 제외되며 과거 날짜에는 당시 활성 상태로 계산됩니다.
 - Daily expenseTotal/incomeTotal은 선택일 Main 지출/입금 합계입니다. transactions는 해당 날짜 전체 내역, activeMemos는 해당 날짜의 모든 활성 메모, payments는 해당 날짜 지급 전체입니다. 배열은 목록 cursor/limit와 무관하며 임의로100개로 자르지 않습니다. 매우 큰 일자 응답의 UI 페이징 전환은 후속 계약 변경으로 다룹니다.
 - Daily 지급의 paid/remaining/complete는 조회일까지 누적한 실제 지급액 기준입니다. 미래 지급으로 과거 날짜의 완료 상태를 바꾸지 않습니다. Monthly 예산의 지급 요약은 기존 월 전체 기록 기준입니다.
@@ -415,12 +415,16 @@ local Swagger UI:
 - **V6__idempotent_writes.sql**이 필요합니다. V1~V5는 수정하지 않았으며, 이번 PR에서 기존 개발 DB에V6를 적용하지 않습니다. 병합 후 별도 승인·백업·명시적 마이그레이션·검증 절차로 적용해야 합니다. 일반 앱 시작은DB 변경을 실행하지 않습니다.
 - 검증: 기존 빠른 테스트와 IdempotentWritesTest, 실제 MySQL IdempotencyIntegrationTest의5개 생성 경로·동시 요청·충돌·수정/삭제·롤백·탈퇴 정리를 확인합니다. 실제 응답 유실 브라우저 회귀는 FE #43과 함께 격리 환경에서 수행합니다.
 
-## 식비 선택 사용·지급 방식 (#45)
-- 월 예산의 food에 enabled·paymentMode(threeInstallments/monthStart)를 추가합니다. 금액 필드는 유지하며 OFF에도 응답에 저장값을 반환합니다.
-- food-budget PUT과 budget-setup food 입력에 두 필드를 명시합니다. ON은 양수3종 필수, OFF는 금액3종NULL·기존 mode로 보내면 저장 금액을 보존합니다.
-- 초기 DRAFT의 enabled=NULL은 미선택입니다. OFF는 식비 없이 READY 가능하며 다시 ON할 때 유효한 금액을 함께 저장해야 합니다.
-- 현재 월 전체 계산을 갱신하고 지난 월은 변경하지 않습니다. 일괄 지급도 여유비에는 당일 식비만 반영합니다.
-- V8__food_settings.sql 신규 migration이 필요합니다. 기존 계정·월은 ON/3회로 전환하며 기존 DRAFT 미입력은 미선택으로 둡니다. 실제 개발 DB 적용은 별도 백업·승인 후 진행합니다.
+## 식비 필수 설정·지급 방식 (#51)
+
+- Food의 enabled 필드를 제거했습니다. 요청/READY 응답은 paymentMode(threeInstallments/monthStart)와 weekday/saturday/sunday 양수3종이 필수입니다. 이전 enabled 포함 요청·누락/null·0원·음수·소수·문자·boolean·상한 초과는400 VALIDATION입니다.
+- DRAFT의 FoodDraft는 지급 방식과 세 금액 모두null 또는양수를 반환합니다. 준비만으로 READY로 전환하지 않습니다. 고정비 없이 items:[]와 유효한 식비만 저장해도 READY가 됩니다.
+- 지급 방식은1일 전액 또는1·11·21일 분할입니다. 분할 회차는1~10일/11~20일/21일~월말이고, 월 합계 및지급3슬롯 구조는 유지합니다.
+- food-budget PUT은 READY 현재 월 전체에 적용합니다. 예산/기록 API 경로·세션/CSRF·오류 형식은 유지하며 미완료 예산은409 BUDGET_NOT_READY입니다.
+- **V10__mandatory_food_budget.sql**은 food_enabled 및의존CHECK를 제거하고 READY 식비3종필수 CHECK를 설정합니다. V1~V9를 수정하지 않으며 미입력 READY 행이 있으면 migration이 실패합니다. 자동 금액 보정·기록 삭제·baseline/repair는 하지 않습니다.
+- 적용 순서: FE/BE 쓰기 중지→백업·V9/데이터 점검→명시 V10→새 BE→대응 FE→기본흐름 검증. MySQL DDL의 전체 트랜잭션 롤백을 가정하지 않습니다. 일반 앱 시작은 migration을 실행하지 않습니다.
+- 기존 OFF/구버전 FE 호환은 제공하지 않습니다. 이 PR에서 실제 개발 DB에는 V10을 적용하지 않으며 FE의 OFF UI/파서/설정 안내는 후속 작업입니다. 현재 개발 FE를 새 BE에 바로 연결하면 enabled 요청이 거부될 수 있습니다.
+- 검증 범위는 PR의 실제 실행 결과를 따릅니다. 단위 테스트 외에 BudgetIntegrationTest, SummaryIntegrationTest, AccountIntegrationTest, MandatoryFoodMigrationTest가 빈 고정비·복사/실패 보존·회차 경계·V9→V10 보존/실패를 다룹니다.
 
 ## 프로필 사진 API (V9)
 

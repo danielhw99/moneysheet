@@ -30,7 +30,7 @@ public class BudgetCalendar {
         long[] totals = new long[3];
         for (int day = 1; day <= month.lengthOfMonth(); day++) {
             LocalDate date = month.atDay(day);
-            int installment = day <= 11 ? 0 : day <= 21 ? 1 : 2;
+            int installment = day <= 10 ? 0 : day <= 20 ? 1 : 2;
             long amount = switch (date.getDayOfWeek()) {
                 case SATURDAY -> saturday;
                 case SUNDAY -> sunday;
@@ -41,8 +41,7 @@ public class BudgetCalendar {
         return List.of(totals[0], totals[1], totals[2]);
     }
 
-    public List<Long> foodInstallments(YearMonth month,boolean enabled,com.danielhw99.budget.entity.FoodPaymentMode mode,Long weekday,Long saturday,Long sunday) {
-        if(!enabled) return List.of(0L,0L,0L);
+    public List<Long> foodInstallments(YearMonth month,com.danielhw99.budget.entity.FoodPaymentMode mode,Long weekday,Long saturday,Long sunday) {
         var totals=foodInstallments(month,weekday,saturday,sunday);
         if(mode==com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START) return List.of(safeAdd(safeAdd(totals.get(0),totals.get(1)),totals.get(2)),0L,0L);
         return totals;

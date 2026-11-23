@@ -175,12 +175,12 @@ class SummaryIntegrationTest {
         var pending=memos.create(owner.getId(),month,memo(2,14900,MemoDirectionValue.EXPENSE));
         var first=service.daily(owner.getId(),month.atDay(1));assertThat(first.carryoverFreeBalance()).isZero();assertThat(first.freeBalance()).isEqualTo(52000);
         var daily=service.daily(owner.getId(),month.atDay(2));
-        assertThat(daily.carryoverFreeBalance()).isEqualTo(52000);assertThat(daily.freeBalance()).isEqualTo(41000);assertThat(daily.remainingFood()).isEqualTo(99000);assertThat(daily.mainBalance()).isEqualTo(130100);
+        assertThat(daily.carryoverFreeBalance()).isEqualTo(52000);assertThat(daily.freeBalance()).isEqualTo(41000);assertThat(daily.remainingFood()).isEqualTo(88000);assertThat(daily.mainBalance()).isEqualTo(119100);
         assertThat(daily.expenseTotal()).isEqualTo(22000);assertThat(daily.incomeTotal()).isZero();assertThat(daily.transactions()).hasSize(1);assertThat(daily.activeMemos()).hasSize(3);
         assertThat(daily.payments()).hasSize(1);assertThat(daily.payments().getFirst().paid()).isEqualTo(60000);assertThat(daily.payments().getFirst().remaining()).isEqualTo(40000);assertThat(daily.payments().getFirst().complete()).isFalse();
         for(var value:List.of(out,in,pending)) memos.complete(owner.getId(),month,value.id().value(),month.atDay(4));
         assertThat(service.daily(owner.getId(),month.atDay(3)).activeMemos()).hasSize(3);
-        var completed=service.daily(owner.getId(),month.atDay(4));assertThat(completed.activeMemos()).isEmpty();assertThat(completed.mainBalance()).isEqualTo(140000);assertThat(completed.payments().getFirst().complete()).isTrue();
+        var completed=service.daily(owner.getId(),month.atDay(4));assertThat(completed.activeMemos()).isEmpty();assertThat(completed.mainBalance()).isEqualTo(129000);assertThat(completed.payments().getFirst().complete()).isTrue();
     }
 
     @Test void monthlyUsesFullBudgetAndMonthlyFlowsNotMainOrActualPayments() {
@@ -255,8 +255,8 @@ class SummaryIntegrationTest {
 
     @Test void allInstallmentEndsAndLeapMonthAreCorrectWithPersistedBudgets() {
         User owner=user();ready(owner);
-        for(int day:new int[]{11,21,30}) assertThat(service.daily(owner.getId(),month.atDay(day)).remainingFood()).isZero();
-        assertThat(service.daily(owner.getId(),month.atDay(12)).remainingFood()).isEqualTo(99000);assertThat(service.daily(owner.getId(),month.atDay(22)).remainingFood()).isEqualTo(88000);
+        for(int day:new int[]{10,20,30}) assertThat(service.daily(owner.getId(),month.atDay(day)).remainingFood()).isZero();
+        assertThat(service.daily(owner.getId(),month.atDay(11)).remainingFood()).isEqualTo(99000);assertThat(service.daily(owner.getId(),month.atDay(21)).remainingFood()).isEqualTo(99000);
         var leap=YearMonth.of(2024,2);budget(owner,leap,BudgetSetupStatus.READY);
         assertThat(service.daily(owner.getId(),leap.atEndOfMonth()).freeBalance()).isEqualTo(319000);assertThat(service.daily(owner.getId(),leap.atEndOfMonth()).remainingFood()).isZero();
         assertThat(service.home(owner.getId(),leap).days()).hasSize(29);
