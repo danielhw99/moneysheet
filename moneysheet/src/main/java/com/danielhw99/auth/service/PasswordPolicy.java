@@ -14,8 +14,8 @@ public class PasswordPolicy {
             "letmeinletmeinletmein", "password123456789");
 
     public void validate(String password) {
-        if (password == null || password.codePointCount(0, password.length()) < 15
-                || password.codePointCount(0, password.length()) > 128
+        if (password == null || password.codePointCount(0, password.length()) < 10
+                || password.codePointCount(0, password.length()) > 20
                 || COMMON.contains(password.toLowerCase(Locale.ROOT))) {
             throw new ApiException(ErrorCode.VALIDATION);
         }

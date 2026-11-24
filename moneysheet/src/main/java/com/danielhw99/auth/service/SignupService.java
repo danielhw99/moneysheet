@@ -36,6 +36,9 @@ public class SignupService {
             throw new ApiException(ErrorCode.VALIDATION);
         }
         if (users.existsByEmailKey(input.email())) throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        if (input.nickname() == null || input.nickname().isBlank()
+                || input.nickname().codePointCount(0, input.nickname().length()) > 50) throw new ApiException(ErrorCode.VALIDATION);
+        if (users.countNicknameConflicts(input.nickname(), 0L) > 0) throw com.danielhw99.user.service.UserUniqueConflict.nickname();
         verification.consume(input.email(),input.verificationToken());
         User user = new User(input.email(), input.email(), input.nickname(), encoder.encode(input.password()),
                 policyVersion, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
@@ -43,15 +46,7 @@ public class SignupService {
         try {
             return Profile.from(users.saveAndFlush(user));
         } catch (DataIntegrityViolationException duplicate) {
-            // Only this insert has one user-supplied unique key; other integrity failures remain server errors.
-            Throwable cause = duplicate;
-            while (cause != null) {
-                if (cause instanceof java.sql.SQLException sql && sql.getErrorCode() == 1062) {
-                    throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
-                }
-                cause = cause.getCause();
-            }
-            throw duplicate;
+            throw com.danielhw99.user.service.UserUniqueConflict.translate(duplicate);
         }
     }
 }

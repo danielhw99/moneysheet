@@ -71,7 +71,7 @@ class TransactionIntegrationTest {
     private final YearMonth month = YearMonth.of(2026,10);
     private User user() {
         String email=UUID.randomUUID()+"@example.com";
-        return users.saveAndFlush(new User(email,email,"Transactions tester","hash","v1",LocalDateTime.now()));
+        return users.saveAndFlush(new User(email,email,java.util.UUID.randomUUID().toString(),"hash","v1",LocalDateTime.now()));
     }
     private void ready(User user) {
         budgets.saveAndFlush(new MonthlyBudget(user,month.atDay(1),BudgetSetupStatus.READY,11000L,15000L,10000L));

@@ -152,7 +152,7 @@ class SummaryIntegrationTest {
     @Autowired JsonMapper mapper;
     @LocalServerPort int port;
     final YearMonth month=YearMonth.of(2026,11);
-    User user() { String email=UUID.randomUUID()+"@example.com";return users.saveAndFlush(new User(email,email,"Summary tester","hash","v1",LocalDateTime.now())); }
+    User user() { String email=UUID.randomUUID()+"@example.com";return users.saveAndFlush(new User(email,email,java.util.UUID.randomUUID().toString(),"hash","v1",LocalDateTime.now())); }
     MonthlyBudget budget(User owner,YearMonth selected,BudgetSetupStatus status) { return budgets.saveAndFlush(new MonthlyBudget(owner,selected.atDay(1),status,11000L,11000L,11000L)); }
     MonthlyBudget ready(User owner) { return budget(owner,month,BudgetSetupStatus.READY); }
     FixedBudgetItem item(User owner,MonthlyBudget budget,long amount) {

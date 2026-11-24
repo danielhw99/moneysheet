@@ -26,7 +26,11 @@ public class AccountService {
   var user=lock(id);
   String value=nickname==null?"":nickname.strip();
   if(value.isEmpty() || value.codePointCount(0,value.length())>50) throw new ApiException(ErrorCode.VALIDATION);
-  user.rename(value);return Profile.from(user);
+  if(users.countNicknameConflicts(value,id)>0) throw UserUniqueConflict.nickname();
+  user.rename(value);
+  try {users.flush();}
+  catch(org.springframework.dao.DataIntegrityViolationException duplicate) {throw UserUniqueConflict.translate(duplicate);}
+  return Profile.from(user);
  }
  @Transactional public void changePassword(Long id,String currentPassword,String newPassword) {
   var user=lock(id);confirm(user,currentPassword);policy.validate(newPassword);user.changePassword(encoder.encode(newPassword));

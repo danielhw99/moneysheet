@@ -238,7 +238,7 @@ MySQL DDL 실패는 일부 변경을 남길 수 있으므로 실패 시 재실�
 - API: GET `/api/v1/auth/csrf`, POST `/api/v1/auth/signup`, POST `/api/v1/auth/login`, POST `/api/v1/auth/logout`, GET `/api/v1/me`.
 - 가입 성공 201 후 자동 로그인하지 않음. 성공 응답은 Profile 직접 반환. 개인정보처리방침 현재 버전 `v1`, `moneysheet.auth.privacy-policy-version`으로 설정하며 서버 값과 다르면 거부.
 - 이메일 앞뒤 공백 제거·Locale.ROOT 소문자, 닉네임 앞뒤 공백 제거. 비밀번호는 변환하지 않음.
-- 비밀번호 15~128 Unicode 코드포인트, 초기 로컬 흔한 비밀번호 차단 목록. Argon2id 19456 KiB/2회/병렬1, salt16/hash32, `{argon2id}` 식별자 저장. BouncyCastle 1.86은 Boot BOM 관리 대상이 아니므로 명시 고정.
+- 신규 비밀번호 10~20 Unicode 코드포인트, 초기 로컬 흔한 비밀번호 차단 목록. Argon2id 19456 KiB/2회/병렬1, salt16/hash32, `{argon2id}` 식별자 저장. BouncyCastle 1.86은 Boot BOM 관리 대상이 아니므로 명시 고정.
 - 제한된 초기 차단 목록은 전체 유출 비밀번호 사전을 대체하지 않음. 공개 운영 전 목록 확장 여부를 별도 검토.
 - 로그인은 가입 최소 길이를 소급 적용하지 않으며 128 코드포인트 상한 적용. 미등록 계정도 더미 해시 비교. 비밀번호·쿠키·CSRF 토큰 로그 금지.
 - CSRF 취득 → 가입 또는 로그인 POST에 응답의 headerName/token 전송. 로그인 성공 후 세션 ID가 교체되고 기존 CSRF 토큰은 폐기되므로 다시 취득.
@@ -401,7 +401,7 @@ local Swagger UI:
 - `PATCH /api/v1/me`: 닉네임만 수정하며 기존 세션을 유지합니다.
 - `PUT /api/v1/me/password`: 현재 비밀번호 확인 후 변경합니다. 모든 기존 세션은 새 인증 요청 시 거부되며 현재 세션과 쿠키도 종료됩니다.
 - `POST /api/v1/me/deletion`: 현재 비밀번호 확인 후 본인 기록·예산·카테고리·계정을 하나의 트랜잭션에서 즉시 삭제합니다. 실패 시 전체 롤백합니다.
-- 세 요청은 로그인과 CSRF가 필요합니다. 현재 비밀번호 오답 `INVALID_CREDENTIALS`는 세션을 종료하지 않습니다. 새 비밀번호는 기존 가입 정책(15~128 코드포인트·공백 보존)을 따릅니다.
+- 세 요청은 로그인과 CSRF가 필요합니다. 현재 비밀번호 오답 `INVALID_CREDENTIALS`는 세션을 종료하지 않습니다. 새 비밀번호는 기존 가입 정책(10~20 코드포인트·공백 보존)을 따릅니다.
 - 변경 전 **V3__account_session_version.sql**을 기존 명시적 `dbInfo` → `dbMigrate` → `dbValidate` 절차로 적용합니다. 기존 V1/V2는 수정하지 않았으며 일반 앱 기동은 마이그레이션을 실행하지 않습니다. 기존 개발 DB에는 자동 적용하지 않습니다.
 - `users.session_version`은 세션 내부 값이며 공개 Profile 응답에 포함하지 않습니다. 비밀번호 변경이 커밋되면 이전 버전 세션은 유효하지 않습니다. 쓰기는 사용자 행 잠금 후 버전을 다시 확인해 대기 중이던 요청도 차단합니다.
 - Swagger UI의 `auth` 그룹에서 `/me` 하위 API를 확인할 수 있습니다. 백업에서 탈퇴 데이터 재복원 방지 절차는 운영 단계에서 별도 구성합니다.
@@ -450,3 +450,20 @@ V11__food_start_date.sql은 기존 READY를 월1일로 보존하고 DRAFT는null
 개발 DB 적용 이력(2026-11-24): 구현 revision `89a8669` 기준으로 사용자 승인·전체 백업 후 V11을 적용했습니다. `dbInfo`·`dbMigrate`·`dbValidate` 통과, 기존12개 테이블의 유지 컬럼 내용·행 수 보존, READY 시작일=월1일/DRAFT=null 및 신규 CHECK를 확인했습니다. 최신 BE의 JPA 검증·CSRF·Swagger 필수 foodStartDate도 확인했습니다. 이 시점 FE는 가동하지 않아 실제 화면 연동 검증은 별도입니다.
 
 다른 환경 또는 향후 전환: 대상 DB의 실제 Flyway 이력과 적용 revision을 먼저 확인하고 별도 승인·백업·명시적 `dbMigrate`/`dbValidate` 절차를 따릅니다. 일반 앱 시작에서는 migration을 수행하지 않습니다. 새 setup 계약은 구 FE와 호환되지 않으므로 FE 변경과 함께 전환해야 합니다.
+
+
+### #55 가입·프로필 입력 정책
+
+- 가입 및 새 비밀번호는 10~20 Unicode 코드포인트이며 공백을 그대로 보존합니다. 기존 긴 비밀번호는 로그인·현재 비밀번호 확인에서 128 코드포인트까지 사용할 수 있습니다.
+- 닉네임은 앞뒤 공백을 제거하고 표시용 대소문자를 유지합니다. 가입·프로필 수정 모두 영문 대소문자를 구분하지 않고 중복을 거부합니다. 본인 이름의 대소문자 변경은 허용합니다.
+- 중복 닉네임은 `409 CONFLICT`와 `nickname` 필드 오류로 반환합니다. 이메일 중복은 기존 `EMAIL_ALREADY_EXISTS`입니다. 동시 요청의 최종 방어는 V12의 `uq_users_nickname_key`입니다.
+- V12는 MySQL `LOWER(nickname)` 생성 컬럼을 바이너리 비교합니다. 내부 공백·악센트·전각 문자는 구분하며, 조회에서도 동일한 MySQL LOWER를 사용합니다. 생성 컬럼에는 애플리케이션이 값을 쓰지 않습니다.
+- **적용 전:** 백업 후 다음 SQL로 기존 중복을 확인합니다. 결과가 있으면 사용자와 해결한 뒤 적용하며 자동으로 이름을 변경하지 않습니다.
+
+```sql
+SELECT LOWER(nickname) COLLATE utf8mb4_0900_bin AS nickname_key, COUNT(*) AS duplicates
+FROM users GROUP BY nickname_key HAVING COUNT(*) > 1;
+```
+
+- 중복 시 V12의 단일 InnoDB ALTER는 실패하며 기존 사용자 데이터는 그대로입니다. 중복 해결·스키마 확인 후 실패한 Flyway 이력 유무를 확인하고, 필요한 경우에만 통제된 repair 후 dbMigrate를 재실행합니다. 일반 앱 실행으로 마이그레이션하지 않습니다.
+- 비밀번호 재입력·일치 확인은 FE에서 처리하며 API·DB에 확인용 비밀번호를 추가하지 않습니다. 닉네임 사전 확인용 별도 API도 추가하지 않습니다.

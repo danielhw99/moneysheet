@@ -90,4 +90,14 @@ class LoginServiceTest {
   for(int i=0;i<5;i++)assertThatThrownBy(()->service.authenticate(new LoginInput("same@example.com","wrong")))
     .isInstanceOfSatisfying(ApiException.class,e->assertThat(e.getErrorCode()).isEqualTo(com.danielhw99.common.error.ErrorCode.INVALID_CREDENTIALS));
  }
+
+ @Test void legacyLongPasswordStillAuthenticates(){
+  var users=mock(UserRepository.class);var encoder=mock(PasswordEncoder.class);
+  var user=new User("legacy@example.com","legacy@example.com","Legacy","hash","v1",java.time.LocalDateTime.now());
+  user.verifyEmail();org.springframework.test.util.ReflectionTestUtils.setField(user,"id",9L);
+  String password="legacy password longer than twenty";
+  when(users.findByEmailKey(user.getEmailKey())).thenReturn(Optional.of(user));when(encoder.matches(password,"hash")).thenReturn(true);
+  var service=new LoginService(users,encoder,new com.danielhw99.auth.security.AuthRateLimiter(java.time.Clock.systemUTC()));
+  assertThat(service.authenticate(new LoginInput(user.getEmail(),password)).userId()).isEqualTo(9L);
+ }
 }

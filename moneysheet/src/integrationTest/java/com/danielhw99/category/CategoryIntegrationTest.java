@@ -250,6 +250,6 @@ class CategoryIntegrationTest {
     }
 
     private Long user(String email) {
-        return users.saveAndFlush(new User(email, email, "Test", "hash", "v1", LocalDateTime.now())).getId();
+        return users.saveAndFlush(new User(email,email,java.util.UUID.randomUUID().toString(), "hash", "v1", LocalDateTime.now())).getId();
     }
 }
