@@ -86,7 +86,7 @@ class CashFlowIntegrationTest {
 
     User user() {
         String email=UUID.randomUUID()+"@example.com";
-        return users.saveAndFlush(new User(email,email,"Cash flow tester","hash","v1",LocalDateTime.now()));
+        return users.saveAndFlush(new User(email,email,java.util.UUID.randomUUID().toString(),"hash","v1",LocalDateTime.now()));
     }
     MonthlyBudget budget(User owner,YearMonth selected,BudgetSetupStatus status) {
         return budgets.saveAndFlush(new MonthlyBudget(owner,selected.atDay(1),status,11000L,15000L,10000L));

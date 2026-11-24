@@ -94,7 +94,7 @@ class PaymentIntegrationTest {
     @Autowired JsonMapper mapper;
     @LocalServerPort int port;
     final YearMonth month=YearMonth.now(ZoneId.of("Asia/Seoul"));
-    User user() { String email=UUID.randomUUID()+"@example.com";return users.saveAndFlush(new User(email,email,"Payment tester","hash","v1",LocalDateTime.now())); }
+    User user() { String email=UUID.randomUUID()+"@example.com";return users.saveAndFlush(new User(email,email,java.util.UUID.randomUUID().toString(),"hash","v1",LocalDateTime.now())); }
     FixedBudgetItem item(User user,YearMonth selected,long amount,String name) {
         var budget=budgets.findByUser_IdAndMonthStart(user.getId(),selected.atDay(1)).orElseGet(()->budgets.saveAndFlush(new MonthlyBudget(user,selected.atDay(1),BudgetSetupStatus.READY,11000L,15000L,10000L)));
         String key=UUID.randomUUID().toString();var category=categories.saveAndFlush(new Category(user,CategoryScope.FIXED_BUDGET,CategoryDirection.NONE,key,key));

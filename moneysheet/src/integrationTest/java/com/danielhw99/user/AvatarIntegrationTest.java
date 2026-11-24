@@ -56,7 +56,7 @@ class AvatarIntegrationTest {
     static final String PASSWORD="a unique avatar password!";
     User user() {
         String email=UUID.randomUUID()+"@example.com";
-        var user=new User(email,email,"Nick",encoder.encode(PASSWORD),"v1",LocalDateTime.now());
+        var user=new User(email,email,java.util.UUID.randomUUID().toString(),encoder.encode(PASSWORD),"v1",LocalDateTime.now());
         user.verifyEmail();return users.saveAndFlush(user);
     }
     MockHttpSession login(User user) throws Exception {

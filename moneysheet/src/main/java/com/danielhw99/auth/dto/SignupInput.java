@@ -11,8 +11,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 public record SignupInput(
         @NotBlank @Email @Pattern(regexp = "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$") @Size(max=254) String email,
-        @NotBlank @Size(max=50) String nickname,
-        @NotNull @Schema(accessMode=Schema.AccessMode.WRITE_ONLY,minLength=15,maxLength=128) String password,
+        @NotBlank @Size(max=50) @Schema(description="앞뒤 공백 제거, 대소문자를 구분하지 않고 중복 거부. 중복 시 409 CONFLICT와 nickname 필드 오류") String nickname,
+        @NotNull @Schema(accessMode=Schema.AccessMode.WRITE_ONLY,minLength=10,maxLength=20) String password,
         @NotBlank @Size(max=50) String privacyPolicyVersion,
         @NotNull @AssertTrue Boolean privacyAgreed,
         @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{43}") @Schema(accessMode=Schema.AccessMode.WRITE_ONLY) String verificationToken) {

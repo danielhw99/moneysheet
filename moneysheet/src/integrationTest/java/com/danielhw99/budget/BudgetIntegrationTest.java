@@ -118,7 +118,7 @@ class BudgetIntegrationTest {
 
     private User user() {
         String email = UUID.randomUUID() + "@example.com";
-        return users.saveAndFlush(new User(email, email, "Budget tester", "hash", "v1", LocalDateTime.now()));
+        return users.saveAndFlush(new User(email,email,java.util.UUID.randomUUID().toString(), "hash", "v1", LocalDateTime.now()));
     }
 
     private Category fixedCategory(User user) {

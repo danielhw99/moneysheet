@@ -86,7 +86,7 @@ class MemoIntegrationTest {
     private final YearMonth month=YearMonth.of(2026,11);
     private User user() {
         String email=UUID.randomUUID()+"@example.com";
-        return users.saveAndFlush(new User(email,email,"Memo tester","hash","v1",LocalDateTime.now()));
+        return users.saveAndFlush(new User(email,email,java.util.UUID.randomUUID().toString(),"hash","v1",LocalDateTime.now()));
     }
     private void ready(User user) { ready(user,month); }
     private void ready(User user,YearMonth selected) {
