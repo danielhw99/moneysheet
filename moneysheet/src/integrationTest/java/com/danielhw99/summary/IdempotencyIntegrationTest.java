@@ -68,7 +68,7 @@ class IdempotencyIntegrationTest {
  User owner() {
   String email=UUID.randomUUID()+"@example.com";
   var user=users.saveAndFlush(new User(email,email,"Idempotency","hash","v1",LocalDateTime.now()));
-  budgets.prepare(user.getId(),month);budgets.setup(user.getId(),month,new BudgetDtos.SetupInput(List.of(),new BudgetDtos.Food(1L,1L,1L)));
+  budgets.prepare(user.getId(),month);budgets.setup(user.getId(),month,new BudgetDtos.SetupInput(List.of(),new BudgetDtos.Food(1L,1L,1L),month.atDay(1)));
   return user;
  }
  MockHttpSession session(User owner) {

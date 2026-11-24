@@ -55,7 +55,15 @@ public class MonthlyBudget extends BaseEntity {
         foodPaymentMode=mode;
         foodWeekday=weekday;foodSaturday=saturday;foodSunday=sunday;
     }
-    public void finishSetup() { setupStatus=BudgetSetupStatus.READY; }
+    public void finishSetup() { if(foodStartDate==null)foodStartDate=monthStart; setupStatus=BudgetSetupStatus.READY; }
+
+    @Column(name="food_start_date")
+    private LocalDate foodStartDate;
+    public LocalDate getFoodStartDate() { return foodStartDate; }
+    public void selectFoodStartDate(LocalDate date) {
+        if(setupStatus!=BudgetSetupStatus.DRAFT) throw new com.danielhw99.common.error.ApiException(com.danielhw99.common.error.ErrorCode.CONFLICT);
+        foodStartDate=date;
+    }
 
     protected MonthlyBudget() {
     }
@@ -70,6 +78,7 @@ public class MonthlyBudget extends BaseEntity {
         this.user = user;
         this.monthStart = monthStart;
         this.setupStatus = setupStatus;
+        this.foodStartDate = setupStatus==BudgetSetupStatus.READY?monthStart:null;
         this.foodWeekday = foodWeekday;
         this.foodSaturday = foodSaturday;
         this.foodSunday = foodSunday;
@@ -101,6 +110,7 @@ public class MonthlyBudget extends BaseEntity {
 
     public void finishSetup(long weekday, long saturday, long sunday) {
         updateFood(weekday, saturday, sunday);
+        if(foodStartDate==null)foodStartDate=monthStart;
         setupStatus = BudgetSetupStatus.READY;
     }
 

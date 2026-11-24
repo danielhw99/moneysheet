@@ -18,6 +18,7 @@ public class BudgetCalendar {
 
     public BudgetCalendar(Clock clock) { this.clock = clock; }
 
+    public LocalDate today() { return LocalDate.now(clock.withZone(SEOUL)); }
     public YearMonth currentMonth() { return YearMonth.from(LocalDate.now(clock.withZone(SEOUL))); }
 
     public void requireWritable(YearMonth month) {
@@ -27,9 +28,13 @@ public class BudgetCalendar {
     }
 
     public List<Long> foodInstallments(YearMonth month, long weekday, long saturday, long sunday) {
+        return foodInstallments(month,weekday,saturday,sunday,month.atDay(1));
+    }
+    public List<Long> foodInstallments(YearMonth month,long weekday,long saturday,long sunday,LocalDate start) {
         long[] totals = new long[3];
         for (int day = 1; day <= month.lengthOfMonth(); day++) {
             LocalDate date = month.atDay(day);
+            if(date.isBefore(start))continue;
             int installment = day <= 10 ? 0 : day <= 20 ? 1 : 2;
             long amount = switch (date.getDayOfWeek()) {
                 case SATURDAY -> saturday;
@@ -42,7 +47,10 @@ public class BudgetCalendar {
     }
 
     public List<Long> foodInstallments(YearMonth month,com.danielhw99.budget.entity.FoodPaymentMode mode,Long weekday,Long saturday,Long sunday) {
-        var totals=foodInstallments(month,weekday,saturday,sunday);
+        return foodInstallments(month,mode,weekday,saturday,sunday,month.atDay(1));
+    }
+    public List<Long> foodInstallments(YearMonth month,com.danielhw99.budget.entity.FoodPaymentMode mode,Long weekday,Long saturday,Long sunday,LocalDate start) {
+        var totals=foodInstallments(month,weekday,saturday,sunday,start);
         if(mode==com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START) return List.of(safeAdd(safeAdd(totals.get(0),totals.get(1)),totals.get(2)),0L,0L);
         return totals;
     }

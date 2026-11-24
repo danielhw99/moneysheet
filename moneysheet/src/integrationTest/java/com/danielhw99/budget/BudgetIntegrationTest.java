@@ -135,12 +135,12 @@ class BudgetIntegrationTest {
         assertThat(items.findByMonthlyBudget_IdOrderByIdAsc(budgets.findByUser_IdAndMonthStart(owner.getId(), month.atDay(1)).orElseThrow().getId()))
                 .isEmpty();
         assertCode(ErrorCode.BUDGET_NOT_READY, () -> service.get(owner.getId(), month));
-        var ready = service.setup(owner.getId(), month, new SetupInput(List.of(), new Food(10L, 20L, 30L)));
+        var ready = service.setup(owner.getId(), month, new SetupInput(List.of(), new Food(10L, 20L, 30L),month().atDay(1)));
         assertThat(ready.status()).isEqualTo("ready");
         assertThat(ready.items()).isEmpty();
         assertThat(ready.foodSummary().installments()).hasSize(3);
         assertThat(service.prepare(owner.getId(), month).status()).isEqualTo("ready");
-        assertCode(ErrorCode.CONFLICT, () -> service.setup(owner.getId(), month, new SetupInput(List.of(), new Food(1L, 1L, 1L))));
+        assertCode(ErrorCode.CONFLICT, () -> service.setup(owner.getId(), month, new SetupInput(List.of(), new Food(1L, 1L, 1L),month().atDay(1))));
     }
 
     @Test void previousMonthCopiesOnceWithNewItemIdAndSetupKeepsId() {
@@ -161,7 +161,7 @@ class BudgetIntegrationTest {
         assertThat(service.prepare(owner.getId(), month).items()).hasSize(1);
         var copied = copy.items().get(0);
         var ready = service.setup(owner.getId(), month, new SetupInput(List.of(new SetupItem(copied.id(),
-                "Rent changed", new ApiId(category.getId()), 120L)), new Food(10L, 20L, 30L)));
+                "Rent changed", new ApiId(category.getId()), 120L)), new Food(10L, 20L, 30L),month().atDay(1)));
         assertThat(ready.items()).singleElement().satisfies(item -> {
             assertThat(item.id()).isEqualTo(copied.id());
             assertThat(item.name()).isEqualTo("Rent changed");
@@ -185,7 +185,7 @@ class BudgetIntegrationTest {
         Category category = fixedCategory(owner);
         YearMonth month = month();
         service.prepare(owner.getId(), month);
-        service.setup(owner.getId(), month, new SetupInput(List.of(), new Food(10L, 20L, 30L)));
+        service.setup(owner.getId(), month, new SetupInput(List.of(), new Food(10L, 20L, 30L),month().atDay(1)));
         var input = new ItemInput("Rent", new ApiId(category.getId()), 100L);
         var created = service.createItem(owner.getId(), month, input);
         assertCode(ErrorCode.NOT_FOUND, () -> service.updateItem(outsider.getId(), month, created.id().value(), input));
@@ -211,12 +211,12 @@ class BudgetIntegrationTest {
         service.prepare(owner.getId(), month);
         var allowance = new SetupItem(null, "Pocket", new ApiId(category.getId()), 1L);
         assertCode(ErrorCode.VALIDATION, () -> service.setup(owner.getId(), month,
-                new SetupInput(List.of(allowance), new Food(0L, 1L, 1L))));
+                new SetupInput(List.of(allowance), new Food(0L, 1L, 1L),month().atDay(1))));
         assertThat(budgets.findByUser_IdAndMonthStart(owner.getId(), month.atDay(1)).orElseThrow().getSetupStatus())
                 .isEqualTo(BudgetSetupStatus.DRAFT);
         assertThat(items.findByMonthlyBudget_IdOrderByIdAsc(budgets.findByUser_IdAndMonthStart(owner.getId(), month.atDay(1)).orElseThrow().getId()))
                 .isEmpty();
-        service.setup(owner.getId(), month, new SetupInput(List.of(allowance), new Food(1L, 1L, 1L)));
+        service.setup(owner.getId(), month, new SetupInput(List.of(allowance), new Food(1L, 1L, 1L),month().atDay(1)));
         var summary = service.get(owner.getId(), month);
         assertThat(summary.items().get(0).paid()).isZero();
         assertThat(summary.items().get(0).remaining()).isEqualTo(1);
@@ -230,7 +230,7 @@ class BudgetIntegrationTest {
         var month = month();
         service.prepare(owner.getId(), month);
         var ready = service.setup(owner.getId(), month, new SetupInput(
-                List.of(new SetupItem(null, "미분류", null, 100L)), new Food(10L, 20L, 30L)));
+                List.of(new SetupItem(null, "미분류", null, 100L)), new Food(10L, 20L, 30L),month().atDay(1)));
         var item = ready.items().getFirst();
         assertThat(item.categoryId()).isNull();
         assertThat(service.get(owner.getId(), month).fixedTotal()).isEqualTo(100L);
@@ -249,9 +249,9 @@ class BudgetIntegrationTest {
         var owner=user();var current=month();var id=owner.getId();
         assertThat(service.prepare(id,current).food().weekday()).isNull();
         var missing=new Food(com.danielhw99.budget.entity.FoodPaymentMode.THREE_INSTALLMENTS,null,null,null);
-        assertCode(ErrorCode.VALIDATION,()->service.setup(id,current,new SetupInput(List.of(),missing)));
+        assertCode(ErrorCode.VALIDATION,()->service.setup(id,current,new SetupInput(List.of(),missing,month().atDay(1))));
         assertCode(ErrorCode.BUDGET_NOT_READY,()->service.get(id,current));
-        var saved=service.setup(id,current,new SetupInput(List.of(),new Food(11000L,15000L,10000L)));
+        var saved=service.setup(id,current,new SetupInput(List.of(),new Food(11000L,15000L,10000L),month().atDay(1)));
         assertThat(saved.items()).isEmpty();assertThat(saved.foodSummary().total()).isPositive();
         assertCode(ErrorCode.VALIDATION,()->service.updateFood(id,current,missing));
         assertThat(service.get(id,current).food().weekday()).isEqualTo(11000);
@@ -272,11 +272,30 @@ class BudgetIntegrationTest {
     }
     @Test void v10RejectsInvalidReadyValuesAndRemovedFoodFlag() {
         var owner=user();var current=month();service.prepare(owner.getId(),current);
-        service.setup(owner.getId(),current,new SetupInput(List.of(),new Food(1L,1L,1L)));
+        service.setup(owner.getId(),current,new SetupInput(List.of(),new Food(1L,1L,1L),month().atDay(1)));
         for(String assignment:List.of("food_weekday=NULL","food_weekday=0","food_saturday=-1","food_sunday=10000000000","food_payment_mode='INVALID'")) {
             assertThatThrownBy(()->jdbc.update("UPDATE monthly_budgets SET "+assignment+" WHERE user_id=?",owner.getId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='monthly_budgets' AND column_name='food_enabled'",Long.class)).isZero();
         assertThat(service.get(owner.getId(),current).food().weekday()).isEqualTo(1);
+    }
+
+    @Test void firstStartDateIsProposedSavedAndCannotBeChanged() {
+        var owner=user();var month=month();var today=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        var draft=service.prepare(owner.getId(),month);assertThat(draft.foodStartDateEditable()).isTrue();assertThat(draft.foodStartDate()).isEqualTo(today);
+        for(var date:List.of(today.plusDays(1),month.minusMonths(1).atEndOfMonth()))
+            assertCode(ErrorCode.VALIDATION,()->service.setup(owner.getId(),month,new SetupInput(List.of(),new Food(11000L,11000L,11000L),date)));
+        var saved=service.setup(owner.getId(),month,new SetupInput(List.of(),new Food(11000L,11000L,11000L),today));
+        assertThat(saved.foodStartDate()).isEqualTo(today);assertThat(saved.foodSummary().total()).isEqualTo((month.lengthOfMonth()-today.getDayOfMonth()+1)*11000L);
+        assertCode(ErrorCode.CONFLICT,()->service.setup(owner.getId(),month,new SetupInput(List.of(),new Food(1L,1L,1L),month.atDay(1))));
+        assertThat(service.updateFood(owner.getId(),month,new Food(20000L,20000L,20000L)).foodStartDate()).isEqualTo(today);
+        assertThat(service.prepare(owner.getId(),month).foodStartDateEditable()).isFalse();
+    }
+    @Test void laterMonthStartsOnFirstAndDoesNotCopyPriorStart() {
+        var owner=user();var month=month();var previous=new MonthlyBudget(owner,month.minusMonths(1).atDay(1),BudgetSetupStatus.DRAFT,11000L,11000L,11000L);
+        previous.selectFoodStartDate(month.minusMonths(1).atDay(17));previous.finishSetup();budgets.saveAndFlush(previous);
+        var draft=service.prepare(owner.getId(),month);assertThat(draft.foodStartDate()).isEqualTo(month.atDay(1));assertThat(draft.foodStartDateEditable()).isFalse();
+        if(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getDayOfMonth()>1)
+            assertCode(ErrorCode.VALIDATION,()->service.setup(owner.getId(),month,new SetupInput(List.of(),new Food(1L,1L,1L),month.atDay(2))));
     }
 }

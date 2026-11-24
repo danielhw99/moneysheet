@@ -36,7 +36,7 @@ class MandatoryFoodMigrationTest {
         try(var db=database()) {
             db.start();flyway(db,"9").migrate();
             try(var c=connect(db)){seed(c,false);}
-            var latest=flyway(db,"latest");assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+            var latest=flyway(db,"10");assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(latest.migrate().migrationsExecuted).isZero();latest.validate();
             try(var c=connect(db)) {
                 assertThat(scalar(c,"SELECT COUNT(*) FROM users")).isEqualTo(1);
@@ -51,10 +51,25 @@ class MandatoryFoodMigrationTest {
         try(var db=database()) {
             db.start();flyway(db,"9").migrate();
             try(var c=connect(db)){seed(c,true);}
-            assertThatThrownBy(()->flyway(db,"latest").migrate()).isInstanceOf(org.flywaydb.core.api.FlywayException.class);
+            assertThatThrownBy(()->flyway(db,"10").migrate()).isInstanceOf(org.flywaydb.core.api.FlywayException.class);
             try(var c=connect(db)) {
                 assertThat(scalar(c,"SELECT COUNT(*) FROM monthly_budgets")).isEqualTo(2);
                 assertThat(scalar(c,"SELECT COUNT(*) FROM monthly_budgets WHERE id=2 AND setup_status='READY' AND food_enabled=FALSE AND food_weekday IS NULL")).isEqualTo(1);
+            }
+        }
+    }
+
+    @Test void v11PreservesReadyFoodAndLeavesDraftUnconfirmed() throws Exception {
+        try(var db=database()) {
+            db.start();flyway(db,"9").migrate();try(var c=connect(db)){seed(c,false);}
+            flyway(db,"10").migrate();var latest=flyway(db,"11");assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);latest.validate();
+            assertThat(latest.migrate().migrationsExecuted).isZero();
+            try(var c=connect(db)) {
+                assertThat(scalar(c,"SELECT COUNT(*) FROM monthly_budgets WHERE id=1 AND food_start_date IS NULL")).isEqualTo(1);
+                assertThat(scalar(c,"SELECT COUNT(*) FROM monthly_budgets WHERE id=2 AND food_start_date=month_start AND food_weekday=11000 AND food_saturday=15000 AND food_sunday=10000 AND food_payment_mode='MONTH_START'")).isEqualTo(1);
+                for(String date:new String[]{"NULL","'2026-10-31'","'2026-12-01'"}) {
+                    assertThatThrownBy(()->{try(var statement=c.createStatement()){statement.executeUpdate("UPDATE monthly_budgets SET food_start_date="+date+" WHERE id=2");}}).isInstanceOf(java.sql.SQLException.class);
+                }
             }
         }
     }
