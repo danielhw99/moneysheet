@@ -43,12 +43,12 @@ public class SummaryService {
         }).toList();
         return new SummaryDtos.Daily(date,numbers.mainBalance(),numbers.freeBalance(),numbers.foodBudget(),numbers.carryoverFreeBalance(),
                 numbers.availableBeforeSpending(),numbers.remainingFood(),numbers.expenseTotal(),numbers.incomeTotal(),
-                rows.transactions().stream().map(TransactionService::response).toList(),rows.memos().stream().map(MemoService::response).toList(),payments);
+                rows.transactions().stream().map(TransactionService::response).toList(),rows.memos().stream().map(MemoService::response).toList(),payments,budget.getFoodStartDate());
     }
     public SummaryDtos.Monthly monthly(Long owner,YearMonth month) { return monthly(month,ready(owner,month)); }
     private SummaryDtos.Monthly monthly(YearMonth month,MonthlyBudget budget) {
         var totals=queries.totals(budget.getId());var value=calculator.monthly(month,food(budget),totals.fixed(),totals.income(),totals.extra());
-        return new SummaryDtos.Monthly(month,value.income(),value.extra(),value.fixedBudget(),value.foodBudget(),value.basicTotal(),value.totalExpense(),value.net());
+        return new SummaryDtos.Monthly(month,value.income(),value.extra(),value.fixedBudget(),value.foodBudget(),value.basicTotal(),value.totalExpense(),value.net(),budget.getFoodStartDate());
     }
     public SummaryDtos.Home home(Long owner,YearMonth month) {
         LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Seoul")));
@@ -70,12 +70,12 @@ public class SummaryService {
             if(!date.isAfter(asOf)) entries.add(new SummaryDtos.AmountEntry("free","여유비",calculator.daily(date,food,ledger).freeBalance()));
             days.add(new SummaryDtos.CalendarDay(date,entries));
         }
-        return new SummaryDtos.Home(month,asOf,days,monthly(month,budget).totalExpense(),calculator.daily(asOf,food,ledger).freeBalance());
+        return new SummaryDtos.Home(month,asOf,days,monthly(month,budget).totalExpense(),calculator.daily(asOf,food,ledger).freeBalance(),budget.getFoodStartDate());
     }
     private MonthlyBudget ready(Long owner,YearMonth month) {
         var budget=budgets.findByUser_IdAndMonthStart(owner,month.atDay(1)).orElseThrow(()->new ApiException(ErrorCode.BUDGET_NOT_READY));
         if(budget.getSetupStatus()!=BudgetSetupStatus.READY) throw new ApiException(ErrorCode.BUDGET_NOT_READY);
         return budget;
     }
-    private Food food(MonthlyBudget budget) { return new Food(budget.getFoodPaymentMode(),budget.getFoodWeekday(),budget.getFoodSaturday(),budget.getFoodSunday()); }
+    private Food food(MonthlyBudget budget) { return new Food(budget.getFoodPaymentMode(),budget.getFoodWeekday(),budget.getFoodSaturday(),budget.getFoodSunday(),budget.getFoodStartDate()); }
 }

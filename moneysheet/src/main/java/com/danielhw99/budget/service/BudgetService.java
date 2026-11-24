@@ -87,7 +87,9 @@ public class BudgetService {
                     categoryId(item), item.getAmount()));
         }
         return new Preparation(ApiFormats.formatMonth(month), budget.getSetupStatus() == BudgetSetupStatus.READY ? "ready" : "draft",
-                source, draftItems, new FoodDraft(budget.getFoodPaymentMode(),budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday()));
+                source, draftItems, new FoodDraft(budget.getFoodPaymentMode(),budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday()),
+                budget.getFoodStartDate()!=null?budget.getFoodStartDate():firstBudget(budget.getUser().getId())?calendar.today():month.atDay(1),
+                budget.getSetupStatus()==BudgetSetupStatus.DRAFT && firstBudget(budget.getUser().getId()));
     }
 
 
@@ -108,6 +110,9 @@ public class BudgetService {
                 .orElseThrow(() -> new ApiException(ErrorCode.BUDGET_NOT_READY));
         if (budget.getSetupStatus() != BudgetSetupStatus.DRAFT) throw new ApiException(ErrorCode.CONFLICT);
         if (input == null || input.items() == null) throw new ApiException(ErrorCode.VALIDATION);
+        var start=input.foodStartDate();
+        if(start==null || !YearMonth.from(start).equals(month) || start.isAfter(calendar.today()) || (!firstBudget(userId) && !start.equals(month.atDay(1))))
+            throw new ApiException(ErrorCode.VALIDATION,"foodStartDate","식비 시작일을 확인해 주세요.");
         validateFood(input.food(),"food.");
         Map<Long, FixedBudgetItem> existing = items.findByMonthlyBudget_IdOrderByIdAsc(budget.getId())
                 .stream().collect(Collectors.toMap(FixedBudgetItem::getId, Function.identity()));
@@ -137,6 +142,7 @@ public class BudgetService {
             }
         }
         applyFood(budget,input.food());
+        budget.selectFoodStartDate(start);
         budget.finishSetup();
         items.flush();
         return summary(budget, month);
@@ -158,12 +164,13 @@ public class BudgetService {
                     item.getAmount() - paid, paid == item.getAmount()));
         }
         Food food = new Food(budget.getFoodPaymentMode(),budget.getFoodWeekday(), budget.getFoodSaturday(), budget.getFoodSunday());
-        var installments = calendar.foodInstallments(month, food.paymentMode(), food.weekday(), food.saturday(), food.sunday());
+        var installments = calendar.foodInstallments(month, food.paymentMode(), food.weekday(), food.saturday(), food.sunday(),budget.getFoodStartDate());
         long total = calendar.safeAdd(calendar.safeAdd(installments.get(0), installments.get(1)), installments.get(2));
         return new Summary(ApiFormats.formatMonth(month), "ready", result, food,
-                fixedTotal, new FoodSummary(total, installments));
+                fixedTotal, new FoodSummary(total, installments),budget.getFoodStartDate());
     }
 
+    private boolean firstBudget(Long userId) { return !budgets.existsByUser_IdAndSetupStatus(userId,BudgetSetupStatus.READY); }
     private void requireReady(MonthlyBudget budget) {
         if (budget.getSetupStatus() != BudgetSetupStatus.READY) throw new ApiException(ErrorCode.BUDGET_NOT_READY);
     }

@@ -71,7 +71,7 @@ class AccountIntegrationTest {
  long seed(long id){
   jdbc.update("INSERT INTO categories(user_id,scope,direction,name,name_key,created_at,updated_at) VALUES (?,'FIXED_BUDGET','NONE','Rent','rent',NOW(6),NOW(6))",id);
   long cat=jdbc.queryForObject("SELECT id FROM categories WHERE user_id=?",Long.class,id);
-  jdbc.update("INSERT INTO monthly_budgets(user_id,month_start,setup_status,food_weekday,food_saturday,food_sunday,created_at,updated_at) VALUES (?,'2026-11-01','READY',11000,15000,10000,NOW(6),NOW(6))",id);
+  jdbc.update("INSERT INTO monthly_budgets(user_id,month_start,food_start_date,setup_status,food_weekday,food_saturday,food_sunday,created_at,updated_at) VALUES (?,'2026-11-01','2026-11-01','READY',11000,15000,10000,NOW(6),NOW(6))",id);
   long budget=jdbc.queryForObject("SELECT id FROM monthly_budgets WHERE user_id=?",Long.class,id);
   jdbc.update("INSERT INTO fixed_budget_items(monthly_budget_id,category_id,name,amount,created_at,updated_at) VALUES (?,?,'Rent',10000,NOW(6),NOW(6))",budget,cat);
   long item=jdbc.queryForObject("SELECT id FROM fixed_budget_items WHERE monthly_budget_id=?",Long.class,budget);

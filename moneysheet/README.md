@@ -435,3 +435,18 @@ local Swagger UI:
 해상도는 **총2400만 화소 이하이면서 가로·세로가 각각8192px 이하**여야 합니다. 예를 들어9000×2000px 사진은1800만 화소지만 가로 제한을 초과하므로400 VALIDATION/file로 거부됩니다. 전체 화소 수와 별개로 이미지 디코더가 처리하는 한 변의 크기도 제한하기 위한 방어 조건입니다. 이런 사진은 가로·세로를 줄인 뒤 다시 업로드해 주세요.
 
 V9는 users.avatar_version과 user_profile_images(BLOB)를 추가합니다. 원장·예산 데이터는 변경하지 않습니다. 사진과 버전은 같은 트랜잭션으로 갱신하고 회원 탈퇴 시 사진도 삭제됩니다. 새 스키마가 필요하므로 배포 순서는 백업 → 명시적 V9 적용 → BE → FE입니다. 일반 앱 실행은 migration을 수행하지 않습니다. 이번 구현 검증은 격리 MySQL을 사용하며 실제 개발 DB V9는 적용하지 않았습니다.
+
+
+## 첫 관리 월 식비 시작일 (#53)
+
+budget-preparation은 foodStartDate와 foodStartDateEditable을 반환합니다. 최초 월은 서울 기준 오늘을 제안하며 해당 월1일~오늘을 선택합니다. 이후 월은1일로 고정하고 전달 날짜는 복사하지 않습니다. budget-setup은 items·food와 함께 foodStartDate를 필수로 받습니다. 준비/저장은 기존 사용자 잠금 아래 처리하며 저장 시 첫 월 여부를 재검사합니다.
+
+시작일은 최초 READY 저장 후 변경할 수 없습니다. 기존 food-budget 요청에는 날짜를 받지 않으며 날짜를 보내면400 VALIDATION입니다. READY setup 재시도는 기존409 CONFLICT입니다. 금액/지급 방식 수정은 저장된 시작일 이후 기간 전체에 적용합니다.
+
+시작일 이전 식비와 지급분만0이며 이전 거래·일반 입금·활성 메모·실제 잔액 입력은 제한하지 않습니다. 여유비는 월1일0에서 기존 기록을 누적하므로 시작일에 강제로 초기화하지 않습니다. Daily/Monthly/Home 및 예산 응답에 foodStartDate를 포함합니다. 분할은1~10/11~20/21~월말, 전액은시작일~월말 합계이며 고정비는 일할 계산하지 않습니다.
+
+V11__food_start_date.sql은 기존 READY를 월1일로 보존하고 DRAFT는null로 둡니다. 월 경계 및 READY 날짜 필수 CHECK를 추가하며 과거 migration은 바꾸지 않습니다.
+
+개발 DB 적용 이력(2026-11-24): 구현 revision `89a8669` 기준으로 사용자 승인·전체 백업 후 V11을 적용했습니다. `dbInfo`·`dbMigrate`·`dbValidate` 통과, 기존12개 테이블의 유지 컬럼 내용·행 수 보존, READY 시작일=월1일/DRAFT=null 및 신규 CHECK를 확인했습니다. 최신 BE의 JPA 검증·CSRF·Swagger 필수 foodStartDate도 확인했습니다. 이 시점 FE는 가동하지 않아 실제 화면 연동 검증은 별도입니다.
+
+다른 환경 또는 향후 전환: 대상 DB의 실제 Flyway 이력과 적용 revision을 먼저 확인하고 별도 승인·백업·명시적 `dbMigrate`/`dbValidate` 절차를 따릅니다. 일반 앱 시작에서는 migration을 수행하지 않습니다. 새 setup 계약은 구 FE와 호환되지 않으므로 FE 변경과 함께 전환해야 합니다.

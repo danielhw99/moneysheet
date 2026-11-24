@@ -37,13 +37,13 @@ public final class BudgetDtos {
             @JsonProperty(required = true)
             @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId id, String name,
             @Schema(nullable = true) ApiId categoryId, Long amount) {}
-    public record SetupInput(List<SetupItem> items, @Valid @NotNull Food food) {}
+    public record SetupInput(List<SetupItem> items, @Valid @NotNull Food food, @JsonProperty(required=true) @NotNull java.time.LocalDate foodStartDate) {}
     public record Item(ApiId id, String name, @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId categoryId, long amount) {}
     public record DraftItem(ApiId id, String name, @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId categoryId, Long amount) {}
-    public record Preparation(String month, String status, String copiedFromMonth, List<DraftItem> items, FoodDraft food) {}
+    public record Preparation(String month, String status, String copiedFromMonth, List<DraftItem> items, FoodDraft food, java.time.LocalDate foodStartDate, boolean foodStartDateEditable) {}
     public record ItemSummary(ApiId id, String name, @Schema(nullable = true, requiredMode = Schema.RequiredMode.REQUIRED) ApiId categoryId, long amount,
                               long paid, long remaining, boolean complete) {}
     public record FoodSummary(long total, List<Long> installments) {}
     public record Summary(String month, String status, List<ItemSummary> items, Food food,
-                          long fixedTotal, FoodSummary foodSummary) {}
+                          long fixedTotal, FoodSummary foodSummary, java.time.LocalDate foodStartDate) {}
 }

@@ -149,7 +149,7 @@ class CategoryIntegrationTest {
         var expense = service.createOrReuse(owner, new CategoryInput("Expense", CategoryScopeValue.MAIN_TRANSACTION, CategoryDirectionValue.EXPENSE));
         budgetService.prepare(owner, month);
         budgetService.setup(owner, month, new com.danielhw99.budget.api.BudgetDtos.SetupInput(java.util.List.of(),
-                new com.danielhw99.budget.api.BudgetDtos.Food(11L, 15L, 10L)));
+                new com.danielhw99.budget.api.BudgetDtos.Food(11L, 15L, 10L),month.atDay(1)));
         var item = budgetService.createItem(owner, month, new com.danielhw99.budget.api.BudgetDtos.ItemInput("Rent", fixed.id(), 100L));
         var payment = payments.saveAndFlush(new com.danielhw99.payment.entity.FixedPayment(
                 budgetItems.findById(item.id().value()).orElseThrow(), month.atDay(1), java.time.LocalTime.NOON, "partial", 40L));
@@ -198,7 +198,7 @@ class CategoryIntegrationTest {
         var fixed = service.createOrReuse(owner, new CategoryInput("Fixed", CategoryScopeValue.FIXED_BUDGET, null));
         budgetService.prepare(owner, month);
         budgetService.setup(owner, month, new com.danielhw99.budget.api.BudgetDtos.SetupInput(java.util.List.of(),
-                new com.danielhw99.budget.api.BudgetDtos.Food(1L, 1L, 1L)));
+                new com.danielhw99.budget.api.BudgetDtos.Food(1L, 1L, 1L),month.atDay(1)));
         var held = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);

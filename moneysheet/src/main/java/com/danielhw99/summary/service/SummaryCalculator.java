@@ -35,7 +35,7 @@ public class SummaryCalculator {
         int end=date.getDayOfMonth()<=10?10:date.getDayOfMonth()<=20?20:month.lengthOfMonth();
         if(food.paymentMode()==com.danielhw99.budget.entity.FoodPaymentMode.MONTH_START) end=month.lengthOfMonth();
         long remaining=0;
-        for(int day=date.getDayOfMonth()+1;day<=end;day++) remaining=add(remaining,foodForDate(month.atDay(day),food));
+        for(int day=date.getDayOfMonth()+1;day<=end && (food.foodStartDate()==null || !date.isBefore(food.foodStartDate()));day++) remaining=add(remaining,foodForDate(month.atDay(day),food));
         MemoState memos=memos(date,ledger);
         long main=add(add(free,remaining),memos.adjustment());
         return new Day(carry,available,free,todayFood,remaining,expense,income,main,memos.active(),memos.completed());
@@ -59,13 +59,14 @@ public class SummaryCalculator {
 
     public Month monthly(YearMonth month,Food food,BigDecimal fixed,BigDecimal income,BigDecimal extra) {
         long fixedTotal=positive(fixed),in=positive(income),out=positive(extra);
-        var installments=calendar.foodInstallments(month,food.paymentMode(),food.weekday(),food.saturday(),food.sunday());
+        var installments=calendar.foodInstallments(month,food.paymentMode(),food.weekday(),food.saturday(),food.sunday(),food.foodStartDate()==null?month.atDay(1):food.foodStartDate());
         long foodTotal=add(add(installments.get(0),installments.get(1)),installments.get(2));
         long basic=add(fixedTotal,foodTotal),expense=add(basic,out);
         return new Month(in,out,fixedTotal,foodTotal,basic,expense,add(in,-expense));
     }
 
     public long foodForDate(LocalDate date,Food food) {
+        if(food.foodStartDate()!=null && date.isBefore(food.foodStartDate()))return 0;
         long amount=switch(date.getDayOfWeek()) { case SATURDAY -> food.saturday(); case SUNDAY -> food.sunday(); default -> food.weekday(); };
         if(amount<1) throw range();
         return positive(BigDecimal.valueOf(amount));
