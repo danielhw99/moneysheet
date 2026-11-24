@@ -445,4 +445,8 @@ budget-preparation은 foodStartDate와 foodStartDateEditable을 반환합니다.
 
 시작일 이전 식비와 지급분만0이며 이전 거래·일반 입금·활성 메모·실제 잔액 입력은 제한하지 않습니다. 여유비는 월1일0에서 기존 기록을 누적하므로 시작일에 강제로 초기화하지 않습니다. Daily/Monthly/Home 및 예산 응답에 foodStartDate를 포함합니다. 분할은1~10/11~20/21~월말, 전액은시작일~월말 합계이며 고정비는 일할 계산하지 않습니다.
 
-V11__food_start_date.sql은 기존 READY를 월1일로 보존하고 DRAFT는null로 둡니다. 월 경계 및 READY 날짜 필수 CHECK를 추가하며 과거 migration은 바꾸지 않습니다. 실제 적용은 별도 승인·백업·명시적dbMigrate/dbValidate가 필요합니다. 일반 앱 시작에서는 수행하지 않습니다. 새 setup 계약은 구 FE와 호환되지 않으므로 FE 변경과 함께 전환해야 합니다. 이 작업에서는 실제 개발 DB 적용·Push·PR 생성을 하지 않습니다.
+V11__food_start_date.sql은 기존 READY를 월1일로 보존하고 DRAFT는null로 둡니다. 월 경계 및 READY 날짜 필수 CHECK를 추가하며 과거 migration은 바꾸지 않습니다.
+
+개발 DB 적용 이력(2026-11-24): 구현 revision `89a8669` 기준으로 사용자 승인·전체 백업 후 V11을 적용했습니다. `dbInfo`·`dbMigrate`·`dbValidate` 통과, 기존12개 테이블의 유지 컬럼 내용·행 수 보존, READY 시작일=월1일/DRAFT=null 및 신규 CHECK를 확인했습니다. 최신 BE의 JPA 검증·CSRF·Swagger 필수 foodStartDate도 확인했습니다. 이 시점 FE는 가동하지 않아 실제 화면 연동 검증은 별도입니다.
+
+다른 환경 또는 향후 전환: 대상 DB의 실제 Flyway 이력과 적용 revision을 먼저 확인하고 별도 승인·백업·명시적 `dbMigrate`/`dbValidate` 절차를 따릅니다. 일반 앱 시작에서는 migration을 수행하지 않습니다. 새 setup 계약은 구 FE와 호환되지 않으므로 FE 변경과 함께 전환해야 합니다.
