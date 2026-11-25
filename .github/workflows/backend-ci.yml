@@ -21,10 +21,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Publication policy tests
+        run: node --test "$GITHUB_WORKSPACE/.github/scripts/ghcr-policy.test.cjs"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+      - name: Registry pull safety tests
+        run: python3 "$GITHUB_WORKSPACE/.github/scripts/test_registry_pull.py"
       - name: Verify Docker
         run: docker info
       - name: Test and build

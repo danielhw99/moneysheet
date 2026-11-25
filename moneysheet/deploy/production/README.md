@@ -17,7 +17,7 @@ Dockerfile은 Java 21 JDK/JRE digest를 고정하고, 최종 이미지를 비루
 
 ## 환경과 비밀 파일
 
-1. `.env.example`을 `.env`로 복사하고 이미지 참조·실제 도메인·메일 설정을 채웁니다. `.env`는 자동 게시하지 않습니다.
+1. `.env.example`을 `.env`로 복사하고 이미지 참조·실제 도메인·메일 설정을 채웁니다. `.env`는 자동 게시하지 않습니다. 초기 생성 이후 `.env`를 편집하는 모든 작업은 [공유 잠금 규칙](ghcr.md#운영-env-수정-시-공유-잠금)에 따라 같은 `.env.lock`을 사용합니다.
 2. 이 디렉토리에 `.secrets`를 만들고 호스트에서 디렉토리 권한을700으로 유지합니다.
 3. 아래 파일을 생성합니다. DB 세 파일은 각각 독립적인64자리 hex 난수, SMTP는 실제 앱 비밀번호입니다. 실제 값은 로그·Git·대화에 넣지 않습니다.
 
@@ -65,3 +65,7 @@ docker compose --env-file .env -f compose.prod.yaml up -d --wait be frontend
 실제 공개 DDNS의 인증서 발급·외부망 접속·재부팅 자동 기동·정기 백업/격리 복원·앱 이미지 롤백·운영 CD는 아직 후속입니다. 이미지/Compose 기반 검증이 전체 운영 배포 완료를 의미하지 않습니다. 정기 백업과 복구 절차는 별도 이슈에서 구성합니다.
 
 공식 참고: https://docs.docker.com/compose/how-tos/use-secrets/ , https://caddyserver.com/docs/caddyfile/directives/reverse_proxy
+
+## Private GHCR 게시
+
+[게시 및 서버 pull 절차](ghcr.md)를 따릅니다. 실제 게시·pull은 PR 병합 후 별도로 검증합니다.
