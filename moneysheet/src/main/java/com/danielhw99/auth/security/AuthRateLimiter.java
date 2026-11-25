@@ -43,6 +43,7 @@ public class AuthRateLimiter {
         @Override public void close() { complete(this, Outcome.CANCELLED); }
     }
 
+    private final Map<String, Window> restoreWindows = new HashMap<>();
     private final Map<String, Window> signupWindows = new HashMap<>();
     private final Map<String, Window> loginWindows = new HashMap<>();
     private final Map<String, Window> verificationSendWindows = new HashMap<>();
@@ -56,6 +57,8 @@ public class AuthRateLimiter {
         Map<String, Window> windows = signup ? signupWindows : loginWindows;
         countRequest(windows,ip,signup?10:30,signup?3600:60);
     }
+
+    public synchronized void restoreRequest(String ip){countRequest(restoreWindows,ip,30,60);}
 
     public synchronized void verificationRequest(String ip,boolean confirmation) {
         countRequest(confirmation?verificationCheckWindows:verificationSendWindows,ip,confirmation?30:10,confirmation?60:3600);

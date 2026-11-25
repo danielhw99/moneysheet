@@ -63,6 +63,19 @@ public class AuthController {
     @Operation(summary="로그인", description="세션 ID 교체 후 프로필 반환. CSRF 토큰을 다시 취득해야 합니다.")
     public Profile login(@Valid @RequestBody LoginInput input, HttpServletRequest request,HttpServletResponse response) {
         var grant=remember.login(login.authenticate(input),input.rememberMe(),rememberCookies.read(request));
+        return establish(grant,request,response);
+    }
+
+    @PostMapping("/session")
+    @Operation(summary="로그인 유지 세션 복원",description="본문 없이 MS_REMEMBER 쿠키와 CSRF로 복원합니다. 성공 시 증명 교체, 직전 증명10초 내 중복409, 만료·무효401. 성공 후 CSRF 재취득. 실패401/409는 유지 쿠키를 삭제하지 않습니다.")
+    public Profile restore(HttpServletRequest request,HttpServletResponse response) throws java.io.IOException {
+        if(request.getInputStream().read()!=-1)throw new com.danielhw99.common.error.ApiException(com.danielhw99.common.error.ErrorCode.VALIDATION);
+        var auth=SecurityContextHolder.getContext().getAuthentication();
+        if(auth!=null && auth.getPrincipal() instanceof com.danielhw99.auth.security.AuthPrincipal principal)return remember.current(principal).profile();
+        return establish(remember.restore(rememberCookies.read(request)),request,response);
+    }
+
+    private Profile establish(com.danielhw99.auth.remember.RememberGrant grant,HttpServletRequest request,HttpServletResponse response) {
         var principal=grant.principal();
         var session=request.getSession();
         request.changeSessionId();

@@ -46,7 +46,7 @@ public class SecurityConfiguration {
                     .accessDeniedHandler((request,response,error) -> errors.write(request,response,
                             error instanceof CsrfException ? ErrorCode.CSRF_INVALID : ErrorCode.FORBIDDEN)))
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/signup", "/api/v1/auth/login",
+                    authorize.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/session",
                         "/api/v1/auth/email-verifications", "/api/v1/auth/email-verifications/confirmation").permitAll();
                     if (environment.matchesProfiles("local")) {
                         authorize.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();

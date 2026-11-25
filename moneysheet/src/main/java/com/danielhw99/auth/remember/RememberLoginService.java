@@ -32,4 +32,23 @@ public class RememberLoginService {
   // A different account's old browser cookie is locked independently, never by guessed selector alone.
   tokens.findLocked(proof.get().selector()).filter(t->t.matches(proof.get())||t.previousMatches(proof.get())).ifPresent(t->t.revoke(clock.instant()));
  }
+
+ @Transactional(readOnly=true) public AuthPrincipal current(AuthPrincipal principal){
+  var user=users.findById(principal.userId()).orElseThrow(()->new ApiException(ErrorCode.UNAUTHENTICATED));
+  if(!user.isEmailVerified()||user.getSessionVersion()!=principal.sessionVersion())throw new ApiException(ErrorCode.UNAUTHENTICATED);
+  return AuthPrincipal.from(user).withRememberSelector(principal.rememberSelector());
+ }
+ @Transactional public RememberGrant restore(String cookie){
+  var proof=RememberProof.parse(cookie).orElseThrow(()->new ApiException(ErrorCode.UNAUTHENTICATED));
+  var locked=lockOwners(null,cookie);
+  var token=tokens.findLocked(proof.selector()).orElseThrow(()->new ApiException(ErrorCode.UNAUTHENTICATED));
+  var user=locked.get(token.getUser().getId());
+  if(user==null||!user.isEmailVerified()||!token.active(clock.instant(),user.getSessionVersion()))throw new ApiException(ErrorCode.UNAUTHENTICATED);
+  if(!token.matches(proof)){
+   if(token.previousMatches(proof)&&token.previousWithinGrace(clock.instant()))throw new ApiException(ErrorCode.CONFLICT);
+   throw new ApiException(ErrorCode.UNAUTHENTICATED);
+  }
+  var next=proof.next();token.rotate(next,clock.instant());tokens.flush();
+  return new RememberGrant(AuthPrincipal.from(user).withRememberSelector(proof.selectorText()),next.cookie(),token.expiresAt());
+ }
 }

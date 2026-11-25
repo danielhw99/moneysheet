@@ -94,4 +94,24 @@ class AuthMvcTest {
     .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After","60"))
     .andExpect(jsonPath("$.code").value("RATE_LIMITED")).andExpect(jsonPath("$.traceId").isNotEmpty());
  }
+
+ @Test void restoreRequiresCsrfAndRejectsRequestBodies() throws Exception {
+  mvc.perform(post("/api/v1/auth/session")).andExpect(status().isForbidden());
+  mvc.perform(post("/api/v1/auth/session").with(csrf()).contentType("application/json").content("{}"))
+   .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
+ }
+
+ @Test void restoresCookieThroughPublicCsrfProtectedEndpoint() throws Exception {
+  var principal=new com.danielhw99.auth.security.AuthPrincipal(1L,"u@example.com","N");
+  when(remember.restore("old")).thenReturn(new com.danielhw99.auth.remember.RememberGrant(principal,"replacement",java.time.Instant.now().plusSeconds(3600)));
+  mvc.perform(post("/api/v1/auth/session").with(csrf()).cookie(new jakarta.servlet.http.Cookie("MS_REMEMBER","old")))
+   .andExpect(status().isOk()).andExpect(jsonPath("$.id").value("1")).andExpect(header().string("Set-Cookie",org.hamcrest.Matchers.containsString("MS_REMEMBER=replacement")));
+ }
+ @Test void failedOrConflictingRestoreDoesNotEraseNewerCookies() throws Exception {
+  for(var code:new com.danielhw99.common.error.ErrorCode[]{com.danielhw99.common.error.ErrorCode.UNAUTHENTICATED,com.danielhw99.common.error.ErrorCode.CONFLICT}){
+   doThrow(new com.danielhw99.common.error.ApiException(code)).when(remember).restore("old");
+   mvc.perform(post("/api/v1/auth/session").with(csrf()).cookie(new jakarta.servlet.http.Cookie("MS_REMEMBER","old")))
+    .andExpect(status().is(code.getStatus().value())).andExpect(header().doesNotExist("Set-Cookie"));
+  }
+ }
 }

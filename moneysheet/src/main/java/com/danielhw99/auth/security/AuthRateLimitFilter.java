@@ -12,6 +12,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 public class AuthRateLimitFilter extends OncePerRequestFilter {
     private static final RequestMatcher LOGIN = PathPatternRequestMatcher.withDefaults()
             .matcher(HttpMethod.POST,"/api/v1/auth/login");
+    private static final RequestMatcher RESTORE=PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST,"/api/v1/auth/session");
     private static final RequestMatcher SIGNUP = PathPatternRequestMatcher.withDefaults()
             .matcher(HttpMethod.POST,"/api/v1/auth/signup");
     private final AuthRateLimiter limiter;
@@ -25,9 +26,10 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             throws ServletException,IOException {
         boolean signup=SIGNUP.matches(request);
         boolean confirm=CONFIRM.matches(request);
-        if(signup || LOGIN.matches(request) || SEND.matches(request) || confirm) {
+        if(RESTORE.matches(request) || signup || LOGIN.matches(request) || SEND.matches(request) || confirm) {
             try {
-                if(SEND.matches(request) || confirm) limiter.verificationRequest(request.getRemoteAddr(),confirm);
+                if(RESTORE.matches(request)) limiter.restoreRequest(request.getRemoteAddr());
+                else if(SEND.matches(request) || confirm) limiter.verificationRequest(request.getRemoteAddr(),confirm);
                 else limiter.request(request.getRemoteAddr(),signup);
             }
             catch(ApiException limited) {
