@@ -10,7 +10,8 @@ RUN javac -d build/health deploy/container/HealthProbe.java
 FROM eclipse-temurin@sha256:a8bff88f760e87e0c8844f8461f807c203fd5e8f78c951c843024647e965eaf5 AS base
 RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app
 COPY moneysheet/deploy/container/entrypoint.sh /opt/entrypoint.sh
-RUN chmod 0555 /opt/entrypoint.sh
+# Guard against Windows tools rewriting the working tree despite eol=lf.
+RUN sed -i 's/\r$//' /opt/entrypoint.sh && chmod 0555 /opt/entrypoint.sh
 USER 10001:10001
 WORKDIR /opt
 

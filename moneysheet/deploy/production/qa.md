@@ -142,6 +142,17 @@ test -z "$(docker volume ls -q --filter "label=com.docker.compose.project=$qa_pr
 
 셸을 닫았거나 실패로 셸이 종료된 경우, 기록한 시험 디렉토리를 확인해 `qa_dir`에 지정하고 `qa_project=$(cat "$qa_dir/project-name")`, `export QA_SECRETS_DIR="$qa_dir/secrets"`로 복구합니다. 이 문서의 `qa()` 함수도 같은 파일 인자로 다시 정의한 뒤 5단계 보호 검사부터 수행합니다. 운영 디렉토리나 추측한 프로젝트 이름으로 폐기하지 않습니다.
 
-## 이번 문서 보완의 확인 범위
+## 격리 절차 보완 당시의 확인 범위
 
 Compose2.40.3에서 두 파일의 실제 config 병합을 확인했습니다. 시험 포트만 남음·BE/MySQL/migration 포트 미공개·고유 프로젝트와 secrets 경로·프로젝트별 비외부 볼륨·QA_SECRETS_DIR 누락 시 실패를 검증했습니다. 문서의 셸 구문과 Python 보호 검사 구문도 확인했습니다. 이 확인에서 전체 스택 기동·마이그레이션·재기동은 실행하지 않았으며, 2~4단계는 위 명령으로 별도 수행해야 합니다.
+
+
+## 필수 통합 검증 실행 결과 — 2026-11-25
+
+- 최신 QA override의 프로젝트·시험 secrets·시험 볼륨 분리, loopback18022/18443만 게시, 기동 전 포트 미점유 확인.
+- 새 격리 MySQL healthy, migration info/migrate/validate 성공. V1~V13 적용, 두 번째 migrate는 버전 목록 변화 없음.
+- BE healthy·FE/Caddy 기동, localhost 시험 TLS에서 정적 파일·SPA·CSRF200/JSON·비로그인 API401/JSON, internal/Swagger/없는assets404 확인.
+- BE 강제 재생성 및 전체 stop/start 후 시험 표식 데이터와 적용 버전 보존, validate 성공 확인.
+- 폐기 직전 프로젝트·볼륨 접두사와 실제 볼륨 label 재검사 후 해당 시험 컨테이너/네트워크/볼륨만 삭제하고 잔여 컨테이너·볼륨0건 확인. 개발 DB는 사용·변경하지 않음.
+- 도중 기존 실행 이미지의 entrypoint.sh CRLF로 `exec /opt/entrypoint.sh: no such file or directory`를 재현했다. Dockerfile에서 실행 스크립트의 CRLF를 정규화하도록 보완했다. 기존 Java 산출물은 바꾸지 않은 시험 이미지에 같은 정규화 작업을 적용하고 Linux 진입점 실행 및 위 필수 통합 검증을 완료했다.
+- 변경된 Dockerfile의 전체 소스 재빌드는 지연되어 중단했다. 최종 Dockerfile 전체 빌드·공개 DDNS/외부 TLS·메일 발송·성능·전체 앱 회귀 테스트는 이번 결과에 포함하지 않는다. 출하 이미지 빌드는 CI/개발 빌드에서 별도 확인해야 한다.
