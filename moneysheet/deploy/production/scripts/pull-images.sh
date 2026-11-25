@@ -27,30 +27,40 @@ done
 [[ "${revisions[1]}" == "${revisions[2]}" ]] || { echo 'BE and migration revisions must match; .env unchanged.' >&2; exit 1; }
 # Update image keys only after every pull and validation succeeds. Never source .env.
 python3 - "$production" "${refs[@]}" "${revisions[@]}" <<'PY'
-import os, re, sys, tempfile, uuid
+import fcntl, os, re, sys, tempfile, uuid
 from pathlib import Path
 from datetime import datetime, timezone
 root=Path(sys.argv[1]); refs=sys.argv[2:5]; revisions=sys.argv[5:8]
 keys=('FE_IMAGE','BE_IMAGE','MIGRATION_IMAGE')
-path=root/'.env'; original=path.read_text()
-for key in keys:
-    if len(re.findall(r'^'+key+r'=.*$',original,re.M)) != 1:
-        raise SystemExit('Expected exactly one '+key+' in .env; no changes made.')
-updated=original
-for key,ref in zip(keys,refs):
-    updated=re.sub(r'^'+key+r'=.*$',lambda _:key+'='+ref,updated,flags=re.M)
-releases=root/'releases'; releases.mkdir(mode=0o700,exist_ok=True)
-stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'-'+uuid.uuid4().hex[:8]
-def private_write(path,content):
-    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-    with os.fdopen(fd,'w') as f:f.write(content)
-private_write(releases/(stamp+'.env.backup'),original)
-private_write(releases/(stamp+'-images.env'),'# FE revision='+revisions[0]+'\n# BE/migration revision='+revisions[1]+'\n'+'\n'.join(k+'='+v for k,v in zip(keys,refs))+'\n')
-fd,tmp=tempfile.mkstemp(prefix='.env-images-',dir=root)
-try:
-    with os.fdopen(fd,'w') as f:f.write(updated)
-    os.replace(tmp,path)
-finally:
-    if os.path.exists(tmp):os.unlink(tmp)
+path=root/'.env'
+# Keep this sidecar file: locking .env itself would lock the old inode after replace.
+lock_fd=os.open(root/'.env.lock',os.O_RDWR|os.O_CREAT,0o600)
+with os.fdopen(lock_fd,'a') as lock:
+    fcntl.flock(lock,fcntl.LOCK_EX)
+    snapshot=path.read_bytes()
+    original=snapshot.decode('utf-8')
+    for key in keys:
+        # Reject alternate Compose declarations, including colon, export and whitespace.
+        declarations=re.findall(r'^[ \t]*(?:export[ \t]+)?'+key+r'(?=[ \t]*(?:[=:]|$|#))[^\r\n]*',original,re.M)
+        if len(declarations)!=1 or not declarations[0].startswith(key+'='):
+            raise SystemExit('Expected exactly one canonical '+key+'= declaration; no changes made.')
+    updated=original
+    for key,ref in zip(keys,refs):
+        updated=re.sub(r'^'+key+r'=.*$',lambda _:key+'='+ref,updated,flags=re.M)
+    releases=root/'releases'; releases.mkdir(mode=0o700,exist_ok=True)
+    stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'-'+uuid.uuid4().hex[:8]
+    def private_write(path,content):
+        fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'w') as f:f.write(content)
+    fd,tmp=tempfile.mkstemp(prefix='.env-images-',dir=root)
+    try:
+        with os.fdopen(fd,'w') as f:f.write(updated)
+        private_write(releases/(stamp+'.env.backup'),original)
+        if path.is_symlink() or path.read_bytes()!=snapshot:
+            raise SystemExit('.env changed during update; replacement aborted. Retry after reviewing concurrent edits.')
+        os.replace(tmp,path)
+        private_write(releases/(stamp+'-images.env'),'# FE revision='+revisions[0]+'\n# BE/migration revision='+revisions[1]+'\n'+'\n'.join(k+'='+v for k,v in zip(keys,refs))+'\n')
+    finally:
+        if os.path.exists(tmp):os.unlink(tmp)
 print('Three digest references recorded; previous .env backed up privately. No services started.')
 PY
