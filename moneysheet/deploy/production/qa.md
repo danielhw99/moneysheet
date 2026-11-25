@@ -156,3 +156,31 @@ Compose2.40.3에서 두 파일의 실제 config 병합을 확인했습니다. �
 - 폐기 직전 프로젝트·볼륨 접두사와 실제 볼륨 label 재검사 후 해당 시험 컨테이너/네트워크/볼륨만 삭제하고 잔여 컨테이너·볼륨0건 확인. 개발 DB는 사용·변경하지 않음.
 - 도중 기존 실행 이미지의 entrypoint.sh CRLF로 `exec /opt/entrypoint.sh: no such file or directory`를 재현했다. Dockerfile에서 실행 스크립트의 CRLF를 정규화하도록 보완했다. 기존 Java 산출물은 바꾸지 않은 시험 이미지에 같은 정규화 작업을 적용하고 Linux 진입점 실행 및 위 필수 통합 검증을 완료했다.
 - 변경된 Dockerfile의 전체 소스 재빌드는 지연되어 중단했다. 최종 Dockerfile 전체 빌드·공개 DDNS/외부 TLS·메일 발송·성능·전체 앱 회귀 테스트는 이번 결과에 포함하지 않는다. 출하 이미지 빌드는 CI/개발 빌드에서 별도 확인해야 한다.
+
+
+## 최종 Dockerfile 전체 빌드·격리 재검증 완료 — 2026-11-25
+
+앞선 보정 이미지 검증과 달리, 아래 결과는 Git 커밋을 archive한 소스의 최종 Dockerfile로 두 타깃을 직접 빌드하고 그 이미지들을 실행한 결과입니다. 기존 이미지에 별도 정규화 레이어를 붙인 시험 이미지는 사용하지 않았습니다.
+
+- 소스 커밋: `011451f588e2ddf129989f8285c619501f8de0fa`
+- 환경: Ubuntu 22.04.5 LTS / x86_64 / Docker Engine 29.1.3 / Compose 2.40.3+ds1-0ubuntu1~22.04.1
+- 빌드: `docker build --target app` 및 `docker build --target migration` 모두 종료코드0. Dockerfile의 모든 단계 실행(동일 내용의 Docker 캐시는 허용).
+
+| 타깃 | 시험 태그 | 실제 이미지 ID |
+| --- | --- | --- |
+| app | `moneysheet-app:final22-011451f` | `sha256:00e969e94bad29c2ef2bf74b2bbb7ef14c58abc991703d203c9e10e5d9f5e75e` |
+| migration | `moneysheet-migration:final22-011451f` | `sha256:130f4d3b6f12ffb98668227eb3b0ed836d87b3399c3c6d965010a7b92d5a19e6` |
+
+- PASS: QA configuration: unique project/secrets/volumes, loopback ports only, ports initially free
+- PASS: fresh isolated MySQL healthy
+- PASS: explicit migration info
+- PASS: explicit migration migrate
+- PASS: explicit migration validate
+- PASS: V1-V13 applied once; repeat migrate unchanged
+- PASS: BE healthy and frontend running; final app image ID matched
+- PASS: localhost TLS: FE/assets/SPA, CSRF 200, API 401 JSON, internal/Swagger/missing asset blocked
+- PASS: BE recreation: healthy, test data and migration history preserved
+- PASS: full stack restart: test data/history preserved; validate succeeds
+- PASS: guarded cleanup: only disposable QA containers/networks/volumes removed
+
+기동 전 두 태그의 이미지 ID를 빌드 기록과 대조했고, 실행 중 BE의 실제 이미지 ID도 일치함을 확인했습니다. 시험 프로젝트 `moneysheet-qa-ed609b5d5c`의 컨테이너·네트워크·시험 볼륨만 폐기했습니다. 개발/운영 DB는 사용하지 않았습니다. HTTPS는 localhost 내부 인증서이며 검증 예외는 시험 클라이언트에만 적용했습니다. 기존 단위 테스트·사용자 화면 QA·성능·실제 SMTP/공개 DDNS 검수는 반복하지 않았습니다. 공개 배포 검증은 여전히 후속입니다.
