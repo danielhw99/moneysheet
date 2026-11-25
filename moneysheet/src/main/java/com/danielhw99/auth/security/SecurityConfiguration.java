@@ -36,7 +36,7 @@ public class SecurityConfiguration {
     }
     @Bean public SecurityFilterChain apiSecurity(HttpSecurity http, SecurityErrorWriter errors,
             Environment environment, HttpSessionSecurityContextRepository contexts,
-            HttpSessionCsrfTokenRepository csrfTokens, Clock clock, AuthRateLimiter limiter, com.danielhw99.user.repository.UserRepository users) throws Exception {
+            HttpSessionCsrfTokenRepository csrfTokens, Clock clock, AuthRateLimiter limiter, com.danielhw99.user.repository.UserRepository users, com.danielhw99.auth.remember.RememberLoginService remember) throws Exception {
         http.formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable).requestCache(AbstractHttpConfigurer::disable)
                 .securityContext(context -> context.securityContextRepository(contexts))
@@ -46,7 +46,7 @@ public class SecurityConfiguration {
                     .accessDeniedHandler((request,response,error) -> errors.write(request,response,
                             error instanceof CsrfException ? ErrorCode.CSRF_INVALID : ErrorCode.FORBIDDEN)))
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/session",
+                    authorize.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/session", "/api/v1/auth/logout",
                         "/api/v1/auth/email-verifications", "/api/v1/auth/email-verifications/confirmation").permitAll();
                     if (environment.matchesProfiles("local")) {
                         authorize.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
@@ -55,6 +55,7 @@ public class SecurityConfiguration {
                 });
         http.addFilterAfter(new SessionExpiryFilter(clock), SecurityContextHolderFilter.class);
         http.addFilterAfter(new AccountSessionFilter(users), SessionExpiryFilter.class);
+        http.addFilterAfter(new RememberSessionFilter(remember), AccountSessionFilter.class);
         http.addFilterAfter(new AuthRateLimitFilter(limiter,errors), CsrfFilter.class);
         return http.build();
     }

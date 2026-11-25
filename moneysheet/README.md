@@ -471,9 +471,18 @@ FROM users GROUP BY nickname_key HAVING COUNT(*) > 1;
 
 ### #57 로그인 유지 — 데이터·발급 기반
 
-로그인 입력에 rememberMe를 추가하며 생략false, 명시null/잘못된 타입은 거부합니다. 선택 시 MS_REMEMBER(HttpOnly·SameSite=Lax·Path=/·운영Secure) 쿠키와 SHA-256 검증값을 발급합니다. selector16바이트·validator32바이트 난수를 사용하며 원문 증명은 DB/로그에 저장하지 않습니다. 최초30일 절대 만료이며 V13은 신규 remember_login_tokens 테이블입니다. 기존V12는 변경하지 않습니다. 실제 개발 DB 적용은 별도 승인·백업 절차가 필요합니다. 일반 세션30분/12시간 정책은 유지합니다. 별도 복원·폐기 경쟁은 다음 단계에서 연결합니다.
+로그인 입력에 rememberMe를 추가하며 생략false, 명시null/잘못된 타입은 거부합니다. 선택 시 MS_REMEMBER(HttpOnly·SameSite=Lax·Path=/·운영Secure) 쿠키와 SHA-256 검증값을 발급합니다. selector16바이트·validator32바이트 난수를 사용하며 원문 증명은 DB/로그에 저장하지 않습니다. 최초30일 절대 만료이며 V13은 신규 remember_login_tokens 테이블입니다. 기존V12는 변경하지 않습니다. 실제 개발 DB 적용은 별도 승인·백업 절차가 필요합니다. 일반 세션30분/12시간 정책은 유지합니다.
 
 
 ### #57 세션 복원·증명 교체
 
 POST /api/v1/auth/session은 본문 없이 MS_REMEMBER 쿠키·CSRF로 호출합니다. 유효한 세션은 그대로 Profile만 반환하고 세션이 없으면 증명 교체·새 세션·Profile을 반환합니다. 직전 증명은 교체 후10초 동안 중복409 CONFLICT로 구분하며 재인증하지 않습니다. 유예 이후/무효/만료/폐기는401입니다. 실패401/409에서 Set-Cookie로 유지 쿠키를 지우지 않습니다. 교체 응답이 완전히 유실되면 비밀번호 재로그인이 필요할 수 있습니다. 만료일은 최초 발급 후30일로 고정됩니다. 복원 IP 제한은 분당30회 독립 버킷입니다. 복원 성공 후 FE는 CSRF를 다시 취득하며 금융 쓰기를 임의 재전송하지 않습니다.
+
+
+### #57 폐기·세션 연결·검증 경계
+
+- 로그아웃은 익명 상태에서도 CSRF 확인 후 204로 처리합니다. 신뢰할 수 있는 세션 소속 또는 현재/직전 증명을 검증해 현재 브라우저의 증명을 폐기하고, JSESSIONID·MS_REMEMBER 쿠키를 제거합니다. selector만으로는 폐기하지 않습니다.
+- 비밀번호 변경 시 session_version 증가와 전체 증명 폐기를 같은 트랜잭션에서 수행합니다. 탈퇴 시 V13의 사용자 FK CASCADE로 증명도 제거합니다. 복원·로그아웃은 사용자→증명 순서로 잠그며 계정 전환 시 사용자 ID 순으로 잠급니다.
+- 유지 증명에 연결된 세션은 요청마다 사용자 버전·증명 소속·폐기·30일 만료를 확인합니다. 업무 쓰기는 사용자 잠금 획득 후에도 증명을 재검사하므로 로그아웃 이전에 대기하던 쓰기로 데이터가 저장되지 않습니다. 일반 세션에는 증명 조회를 추가하지 않습니다.
+- 만료/폐기 데이터는 서버 시작 1시간 후부터 매시간 최대 500행씩 삭제합니다. 정리 여부와 무관하게 만료·폐기 증명은 즉시 거부합니다.
+- 검증: Windows `test`, `compileIntegrationTestJava`, `bootJar`; Ubuntu 격리 Testcontainers MySQL의 AuthIntegrationTest·AccountIntegrationTest. 실제 개발 DB의 V13 적용·FE 체크박스/복원 연결·모바일 재방문 검수는 별도 후속 작업입니다.

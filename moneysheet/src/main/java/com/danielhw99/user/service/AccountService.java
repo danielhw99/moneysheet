@@ -18,8 +18,9 @@ public class AccountService {
  private final PasswordPolicy policy;
  private final AuthRateLimiter limiter;
  private final EntityManager em;
- public AccountService(UserRepository users,PasswordEncoder encoder,PasswordPolicy policy,AuthRateLimiter limiter,EntityManager em) {
-  this.users=users;this.encoder=encoder;this.policy=policy;this.limiter=limiter;this.em=em;
+ private final com.danielhw99.auth.remember.RememberLoginService remember;
+ public AccountService(UserRepository users,PasswordEncoder encoder,PasswordPolicy policy,AuthRateLimiter limiter,EntityManager em,com.danielhw99.auth.remember.RememberLoginService remember) {
+  this.users=users;this.encoder=encoder;this.policy=policy;this.limiter=limiter;this.em=em;this.remember=remember;
  }
  private User lock(Long id) {return ActiveAccount.requireCurrent(users.findWithLockingById(id).orElseThrow(()->new ApiException(ErrorCode.UNAUTHENTICATED)));}
  @Transactional public Profile updateNickname(Long id,String nickname) {
@@ -33,7 +34,7 @@ public class AccountService {
   return Profile.from(user);
  }
  @Transactional public void changePassword(Long id,String currentPassword,String newPassword) {
-  var user=lock(id);confirm(user,currentPassword);policy.validate(newPassword);user.changePassword(encoder.encode(newPassword));
+  var user=lock(id);confirm(user,currentPassword);policy.validate(newPassword);user.changePassword(encoder.encode(newPassword));remember.revokeAll(id);
  }
  private void confirm(User user,String password) {
   if(password==null || password.isEmpty() || password.codePointCount(0,password.length())>128) throw new ApiException(ErrorCode.VALIDATION);

@@ -60,7 +60,7 @@ public class AuthController {
     public Profile signup(@Valid @RequestBody SignupInput input) { return signup.signup(input); }
 
     @PostMapping("/login")
-    @Operation(summary="로그인", description="세션 ID 교체 후 프로필 반환. CSRF 토큰을 다시 취득해야 합니다.")
+    @Operation(summary="로그인", description="rememberMe 생략은 false입니다. true면 30일 로그인 유지 증명을 발급합니다. 세션 ID 교체 후 CSRF를 다시 취득해야 합니다.")
     public Profile login(@Valid @RequestBody LoginInput input, HttpServletRequest request,HttpServletResponse response) {
         var grant=remember.login(login.authenticate(input),input.rememberMe(),rememberCookies.read(request));
         return establish(grant,request,response);
@@ -92,8 +92,12 @@ public class AuthController {
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary="로그아웃", description="현재 세션을 무효화합니다. 유효한 CSRF 토큰이 필요합니다.")
+    @Operation(summary="로그아웃", description="현재 브라우저의 세션·로그인 유지 증명을 폐기합니다. 세션 만료 후에도 CSRF를 취득해 호출할 수 있습니다.")
     public void logout(HttpServletRequest request,HttpServletResponse response) {
+        var authentication=SecurityContextHolder.getContext().getAuthentication();
+        var principal=authentication!=null&&authentication.getPrincipal() instanceof com.danielhw99.auth.security.AuthPrincipal value?value:null;
+        remember.logout(principal,rememberCookies.read(request));
+        rememberCookies.write(response,new com.danielhw99.auth.remember.RememberGrant(null,null,null));
         var logout = new SecurityContextLogoutHandler();
         // Other in-flight requests may hold the session context; retain their principal for version checks.
         logout.setClearAuthentication(false);

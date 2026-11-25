@@ -1,7 +1,8 @@
 package com.danielhw99.auth.remember;
 import java.time.Clock;
 import com.danielhw99.auth.security.AuthPrincipal;
-import com.danielhw99.common.error.*;
+import com.danielhw99.common.error.ApiException;
+import com.danielhw99.common.error.ErrorCode;
 import com.danielhw99.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,23 @@ public class RememberLoginService {
   var proof=RememberProof.create();var token=new RememberLoginToken(user,proof,clock.instant());tokens.saveAndFlush(token);
   return new RememberGrant(principal.withRememberSelector(proof.selectorText()),proof.cookie(),token.expiresAt());
  }
+ @Transactional(readOnly=true) public boolean sessionValid(AuthPrincipal principal){
+  if(principal.rememberSelector()==null)return true;
+  var selector=RememberProof.selectorBytes(principal.rememberSelector());if(selector.isEmpty())return false;
+  var token=tokens.findById(selector.get());if(token.isEmpty())return false;
+  var user=users.findById(principal.userId());
+  return user.isPresent()&&user.get().isEmailVerified()&&user.get().getSessionVersion()==principal.sessionVersion()
+    &&token.get().getUser().getId().equals(principal.userId())&&token.get().active(clock.instant(),principal.sessionVersion());
+ }
+ @Transactional public void logout(AuthPrincipal principal,String cookie){
+  var locked=lockOwners(principal==null?null:principal.userId(),cookie);
+  if(principal!=null&&locked.containsKey(principal.userId()))
+   RememberProof.selectorBytes(principal.rememberSelector()).flatMap(tokens::findLocked)
+    .filter(t->t.getUser().getId().equals(principal.userId())).ifPresent(t->t.revoke(clock.instant()));
+  revokePresented(cookie);
+ }
+ // AccountService already holds the owner lock; join its password-change transaction.
+ @Transactional public void revokeAll(Long owner){tokens.revokeAll(owner,java.time.LocalDateTime.ofInstant(clock.instant(),java.time.ZoneOffset.UTC));}
  private java.util.Map<Long,com.danielhw99.user.entity.User> lockOwners(Long target,String cookie){
   var ids=new java.util.TreeSet<Long>();if(target!=null)ids.add(target);
   RememberProof.parse(cookie).flatMap(p->tokens.ownerId(p.selector())).ifPresent(ids::add);

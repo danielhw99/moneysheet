@@ -3,7 +3,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.security.MessageDigest;
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import com.danielhw99.user.entity.User;
 @Entity @Table(name="remember_login_tokens")
 public class RememberLoginToken {

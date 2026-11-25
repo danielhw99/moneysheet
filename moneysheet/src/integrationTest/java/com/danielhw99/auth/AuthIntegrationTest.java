@@ -165,7 +165,7 @@ class AuthIntegrationTest {
   String freshToken=mapper.readTree(fresh.getResponse().getContentAsString()).get("token").asText();
   mvc.perform(post("/api/v1/auth/logout").session(session).header("X-CSRF-TOKEN",freshToken)).andExpect(status().isNoContent());
   mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
-  assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
+  assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
  }
 
  @Test void concurrentSignupPreservesUniqueEmail() throws Exception {
@@ -222,5 +222,114 @@ class AuthIntegrationTest {
    var denied=client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base+"/api/v1/me")).GET().build(),java.net.http.HttpResponse.BodyHandlers.ofString());
    assertThat(denied.statusCode()).isEqualTo(401);
   }
+ }
+
+ @Autowired com.danielhw99.auth.remember.RememberLoginService remember;
+ @Autowired com.danielhw99.auth.remember.RememberTokenRepository rememberTokens;
+ @Autowired com.danielhw99.auth.remember.RememberCleanup rememberCleanup;
+ @Autowired com.danielhw99.user.service.AccountService accounts;
+ @Autowired org.springframework.security.crypto.password.PasswordEncoder passwords;
+ @Autowired org.springframework.transaction.PlatformTransactionManager tm;
+ static final String REMEMBER_PASSWORD="remember passphrase!";
+ com.danielhw99.user.entity.User rememberUser(){
+  String key=java.util.UUID.randomUUID().toString();
+  var u=new com.danielhw99.user.entity.User(key+"@example.com",key+"@example.com",key,passwords.encode(REMEMBER_PASSWORD),"v1",java.time.LocalDateTime.now());
+  u.verifyEmail();return users.saveAndFlush(u);
+ }
+ com.danielhw99.auth.remember.RememberGrant grant(com.danielhw99.user.entity.User user){
+  return remember.login(com.danielhw99.auth.security.AuthPrincipal.from(user),true,null);
+ }
+ jakarta.servlet.http.Cookie rememberCookie(String value){return new jakarta.servlet.http.Cookie("MS_REMEMBER",value);}
+ org.springframework.test.web.servlet.ResultActions restore(String value) throws Exception {
+  return mvc.perform(post("/api/v1/auth/session").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf()).cookie(rememberCookie(value)));
+ }
+ @Test void rememberHttpIssuanceRotationExistingSessionAndExpiredFamily() throws Exception {
+  var user=rememberUser();
+  var login=mvc.perform(post("/api/v1/auth/login").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+   .contentType("application/json").content("{\"email\":\""+user.getEmail()+"\",\"password\":\""+REMEMBER_PASSWORD+"\",\"rememberMe\":true}"))
+   .andExpect(status().isOk()).andExpect(header().string("Cache-Control",org.hamcrest.Matchers.containsString("no-store")))
+   .andExpect(jsonPath("$.rememberSelector").doesNotExist()).andReturn();
+  var cookie=login.getResponse().getCookie("MS_REMEMBER");assertThat(cookie).isNotNull();
+  var proof=com.danielhw99.auth.remember.RememberProof.parse(cookie.getValue()).orElseThrow();
+  assertThat(jdbc.queryForObject("SELECT validator_hash FROM remember_login_tokens WHERE selector=?",byte[].class,proof.selector())).containsExactly(proof.hash());
+  var expiry=rememberTokens.findById(proof.selector()).orElseThrow().expiresAt();
+  var session=(MockHttpSession)login.getRequest().getSession(false);
+  mvc.perform(post("/api/v1/auth/session").session(session).with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf()).cookie(rememberCookie("malformed")))
+   .andExpect(status().isOk()).andExpect(header().doesNotExist("Set-Cookie"));
+  // /me never restores merely because a remember cookie exists.
+  mvc.perform(get("/api/v1/me").cookie(cookie)).andExpect(status().isUnauthorized());
+  var restored=restore(cookie.getValue()).andExpect(status().isOk()).andReturn();
+  var replacement=restored.getResponse().getCookie("MS_REMEMBER");assertThat(replacement.getValue()).isNotEqualTo(cookie.getValue());
+  assertThat(rememberTokens.findById(proof.selector()).orElseThrow().expiresAt()).isEqualTo(expiry);
+  restore(cookie.getValue()).andExpect(status().isConflict()).andExpect(header().doesNotExist("Set-Cookie"));
+  restore(replacement.getValue()).andExpect(status().isOk());
+  jdbc.update("UPDATE remember_login_tokens SET issued_at=DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 31 DAY), expires_at=DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 1 SECOND) WHERE selector=?",proof.selector());
+  mvc.perform(get("/api/v1/me").session((MockHttpSession)restored.getRequest().getSession(false))).andExpect(status().isUnauthorized());
+  restore(replacement.getValue()).andExpect(status().isUnauthorized());
+ }
+ @Test void oldCookieLogoutRevokesRotatedFamilyAndIsAnonymousIdempotent() throws Exception {
+  var grant=grant(rememberUser());var restored=restore(grant.cookieValue()).andExpect(status().isOk()).andReturn();
+  var session=(MockHttpSession)restored.getRequest().getSession(false);
+  mvc.perform(post("/api/v1/auth/logout").cookie(rememberCookie(grant.cookieValue()))).andExpect(status().isForbidden());
+  for(int i=0;i<2;i++) mvc.perform(post("/api/v1/auth/logout").cookie(rememberCookie(grant.cookieValue()))
+   .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf()))
+   .andExpect(status().isNoContent()).andExpect(header().stringValues("Set-Cookie",org.hamcrest.Matchers.hasItems(org.hamcrest.Matchers.containsString("MS_REMEMBER=;"),org.hamcrest.Matchers.containsString("JSESSIONID=;"))));
+  mvc.perform(get("/api/v1/me").session(session)).andExpect(status().isUnauthorized());
+  restore(restored.getResponse().getCookie("MS_REMEMBER").getValue()).andExpect(status().isUnauthorized());
+ }
+ @Test void parallelRestoresProduceOnlyOneNewProofAndLogoutCannotResurrectIt() throws Exception {
+  var user=rememberUser();var initial=grant(user);var start=new CountDownLatch(1);
+  try(var executor=Executors.newFixedThreadPool(2)){
+   Callable<String> action=()->{start.await();try{remember.restore(initial.cookieValue());return "ok";}catch(ApiException e){return e.getErrorCode().name();}};
+   var a=executor.submit(action);var b=executor.submit(action);start.countDown();
+   assertThat(List.of(a.get(20,TimeUnit.SECONDS),b.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder("ok","CONFLICT");
+   var current=grant(user);var race=new CountDownLatch(1);
+   var restored=executor.submit(()->{race.await();try{return remember.restore(current.cookieValue());}catch(ApiException e){assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);return null;}});
+   var loggedOut=executor.submit(()->{race.await();remember.logout(null,current.cookieValue());return true;});race.countDown();
+   var late=restored.get(20,TimeUnit.SECONDS);assertThat(loggedOut.get(20,TimeUnit.SECONDS)).isTrue();
+   if(late!=null)assertThat(remember.sessionValid(late.principal())).isFalse();
+   assertThatThrownBy(()->remember.restore(current.cookieValue())).isInstanceOf(ApiException.class);
+  }
+ }
+ @Test void passwordChangeDeletionRollbackAndCleanupPreserveProofRules(){
+  var user=rememberUser();var first=grant(user);var second=grant(user);
+  accounts.changePassword(user.getId(),REMEMBER_PASSWORD,"new remember secret!");
+  assertThat(remember.sessionValid(first.principal())).isFalse();
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM remember_login_tokens WHERE user_id=? AND revoked_at IS NULL",Long.class,user.getId())).isZero();
+  assertThatThrownBy(()->remember.restore(second.cookieValue())).isInstanceOf(ApiException.class);
+  var fresh=users.findById(user.getId()).orElseThrow();grant(fresh);accounts.deleteAccount(user.getId(),"new remember secret!");
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM remember_login_tokens WHERE user_id=?",Long.class,user.getId())).isZero();
+  var rollbackUser=rememberUser();
+  var rolled=new org.springframework.transaction.support.TransactionTemplate(tm).execute(status->{var g=grant(rollbackUser);status.setRollbackOnly();return g;});
+  assertThat(rememberTokens.findById(com.danielhw99.auth.remember.RememberProof.parse(rolled.cookieValue()).orElseThrow().selector())).isEmpty();
+  var active=grant(rollbackUser);var revoked=grant(rollbackUser);remember.logout(null,revoked.cookieValue());rememberCleanup.removeInactive();
+  assertThat(rememberTokens.findById(com.danielhw99.auth.remember.RememberProof.parse(revoked.cookieValue()).orElseThrow().selector())).isEmpty();
+  assertThat(remember.sessionValid(active.principal())).isTrue();
+ }
+ @Test void queuedWriteRechecksRevokedRememberFamilyAfterAcquiringOwnerLock() throws Exception {
+  var user=rememberUser();var grant=grant(user);
+  try(var executor=Executors.newSingleThreadExecutor()){
+   final java.util.concurrent.Future<?>[] pending=new java.util.concurrent.Future<?>[1];
+   new org.springframework.transaction.support.TransactionTemplate(tm).executeWithoutResult(status->{
+    users.findWithLockingById(user.getId()).orElseThrow();
+    pending[0]=executor.submit(()->{
+     var context=org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
+     context.setAuthentication(org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(grant.principal(),null,List.of()));
+     org.springframework.security.core.context.SecurityContextHolder.setContext(context);
+     try{return accounts.updateNickname(user.getId(),"must-not-save");}finally{org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+    });
+    awaitRememberOwnerLockWait(user.getId());remember.logout(null,grant.cookieValue());
+   });
+   assertThatThrownBy(()->pending[0].get(20,TimeUnit.SECONDS)).hasCauseInstanceOf(ApiException.class);
+   assertThat(users.findById(user.getId()).orElseThrow().getNickname()).isEqualTo(user.getNickname());
+  }
+ }
+ private void awaitRememberOwnerLockWait(long owner){
+  String sql="SELECT COUNT(*) FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE=w.ENGINE AND l.ENGINE_LOCK_ID=w.BLOCKING_ENGINE_LOCK_ID WHERE l.OBJECT_SCHEMA=? AND l.OBJECT_NAME='users' AND l.INDEX_NAME='PRIMARY' AND l.LOCK_DATA=?";
+  try(var connection=java.sql.DriverManager.getConnection(MYSQL.getJdbcUrl(),"root",MYSQL.getPassword());var statement=connection.prepareStatement(sql)){
+   statement.setString(1,MYSQL.getDatabaseName());statement.setString(2,Long.toString(owner));long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+   while(System.nanoTime()<deadline){try(var rs=statement.executeQuery()){rs.next();if(rs.getInt(1)>0)return;}Thread.sleep(20);}
+   throw new AssertionError("queued write did not wait for the owner lock");
+  }catch(Exception e){throw new IllegalStateException(e);}
  }
 }

@@ -1,6 +1,12 @@
 package com.danielhw99.auth;
-import java.time.*;
-import com.danielhw99.auth.remember.*;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import com.danielhw99.auth.remember.RememberProof;
+import com.danielhw99.auth.remember.RememberLoginToken;
+import com.danielhw99.auth.remember.RememberCookies;
+import com.danielhw99.auth.remember.RememberGrant;
 import com.danielhw99.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;

@@ -114,4 +114,10 @@ class AuthMvcTest {
     .andExpect(status().is(code.getStatus().value())).andExpect(header().doesNotExist("Set-Cookie"));
   }
  }
+
+ @Test void anonymousLogoutStillRequiresCsrfAndClearsBothCookies() throws Exception {
+  mvc.perform(post("/api/v1/auth/logout")).andExpect(status().isForbidden());
+  mvc.perform(post("/api/v1/auth/logout").with(csrf())).andExpect(status().isNoContent())
+   .andExpect(header().stringValues("Set-Cookie",org.hamcrest.Matchers.hasItems(org.hamcrest.Matchers.containsString("MS_REMEMBER=;"),org.hamcrest.Matchers.containsString("JSESSIONID=;"))));
+ }
 }

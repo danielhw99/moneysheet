@@ -17,6 +17,11 @@ public final class RememberProof {
    var proof=new RememberProof(s,v);return proof.cookie().equals(value)?Optional.of(proof):Optional.empty();
   }catch(IllegalArgumentException invalid){return Optional.empty();}
  }
+ public static Optional<byte[]> selectorBytes(String value){
+  if(value==null||!value.matches("[A-Za-z0-9_-]{22}"))return Optional.empty();
+  try{byte[] decoded=Base64.getUrlDecoder().decode(value);return ENCODER.encodeToString(decoded).equals(value)?Optional.of(decoded):Optional.empty();}
+  catch(IllegalArgumentException invalid){return Optional.empty();}
+ }
  public RememberProof next(){byte[] v=new byte[32];RANDOM.nextBytes(v);return new RememberProof(selector,v);}
  public byte[] selector(){return selector.clone();}
  public String selectorText(){return ENCODER.encodeToString(selector);}
