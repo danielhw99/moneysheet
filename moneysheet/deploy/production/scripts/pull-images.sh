@@ -51,16 +51,27 @@ with os.fdopen(lock_fd,'a') as lock:
     stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'-'+uuid.uuid4().hex[:8]
     def private_write(path,content):
         fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-        with os.fdopen(fd,'w') as f:f.write(content)
+        with os.fdopen(fd,'w') as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
     fd,tmp=tempfile.mkstemp(prefix='.env-images-',dir=root)
+    record=releases/(stamp+'-images.env')
+    committed=False
     try:
-        with os.fdopen(fd,'w') as f:f.write(updated)
+        with os.fdopen(fd,'w') as f:
+            f.write(updated)
+            f.flush()
+            os.fsync(f.fileno())
         private_write(releases/(stamp+'.env.backup'),original)
+        private_write(record,'# FE revision='+revisions[0]+'\n# BE/migration revision='+revisions[1]+'\n'+'\n'.join(k+'='+v for k,v in zip(keys,refs))+'\n')
         if path.is_symlink() or path.read_bytes()!=snapshot:
             raise SystemExit('.env changed during update; replacement aborted. Retry after reviewing concurrent edits.')
+        # Final commit: all file writes must succeed before switching image references.
         os.replace(tmp,path)
-        private_write(releases/(stamp+'-images.env'),'# FE revision='+revisions[0]+'\n# BE/migration revision='+revisions[1]+'\n'+'\n'.join(k+'='+v for k,v in zip(keys,refs))+'\n')
+        committed=True
     finally:
+        if not committed:record.unlink(missing_ok=True)
         if os.path.exists(tmp):os.unlink(tmp)
 print('Three digest references recorded; previous .env backed up privately. No services started.')
 PY

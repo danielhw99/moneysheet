@@ -139,4 +139,47 @@ exec(compile(sys.stdin.read(),'pull-update','exec'))
         self.assertIn('concurrent.invalid',updated)
         for ref in self.refs:self.assertIn(ref,updated)
 
+
+    def test_digest_write_failure_preserves_environment_and_cleans_partial_record(self):
+        wrapper="""import errno,os,sys
+from contextlib import contextmanager
+from unittest.mock import patch,Mock
+real_fdopen=os.fdopen
+@contextmanager
+def fail_record_write(fd,*args,**kwargs):
+    record=os.readlink('/proc/self/fd/'+str(fd)).endswith('-images.env')
+    with real_fdopen(fd,*args,**kwargs) as stream:
+        if record:
+            def disk_full(content):
+                stream.write(content[:12])
+                stream.flush()
+                raise OSError(errno.ENOSPC,'Injected digest write disk full')
+            proxy=Mock(wraps=stream)
+            proxy.write.side_effect=disk_full
+            yield proxy
+        else:yield stream
+with patch('os.fdopen',side_effect=fail_record_write):
+    exec(compile(sys.stdin.read(),'pull-update','exec'),{'__name__':'__main__'})
+"""
+        result=subprocess.run(['python3','-c',wrapper,str(self.prod),*self.refs,*(['a'*40]*3)],input=self.python_update(),text=True,capture_output=True)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Injected digest write disk full',result.stderr)
+        self.assertEqual((self.prod/'.env').read_text(),self.original)
+        self.assertFalse(list((self.prod/'releases').glob('*-images.env')))
+        self.assertFalse(list(self.prod.glob('.env-images-*')))
+
+
+    def test_replace_failure_cleans_prepared_digest_record(self):
+        wrapper="""import sys
+from unittest.mock import patch
+with patch('os.replace',side_effect=OSError('Injected replacement failure')):
+    exec(compile(sys.stdin.read(),'pull-update','exec'),{'__name__':'__main__'})
+"""
+        result=subprocess.run(['python3','-c',wrapper,str(self.prod),*self.refs,*(['a'*40]*3)],input=self.python_update(),text=True,capture_output=True)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Injected replacement failure',result.stderr)
+        self.assertEqual((self.prod/'.env').read_text(),self.original)
+        self.assertFalse(list((self.prod/'releases').glob('*-images.env')))
+        self.assertFalse(list(self.prod.glob('.env-images-*')))
+
 if __name__ == '__main__':unittest.main()
