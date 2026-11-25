@@ -10,6 +10,7 @@ public interface RememberTokenRepository extends JpaRepository<RememberLoginToke
  @Modifying(flushAutomatically=true)
  @Query("update RememberLoginToken t set t.revokedAt=:now where t.user.id=:owner and t.revokedAt is null")
  int revokeAll(@Param("owner") Long owner,@Param("now") java.time.LocalDateTime now);
+ @org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
  @Modifying
  @Query(value="DELETE FROM remember_login_tokens WHERE expires_at<=:now OR revoked_at IS NOT NULL LIMIT 500",nativeQuery=true)
  int removeInactiveBatch(@Param("now") java.time.LocalDateTime now);
