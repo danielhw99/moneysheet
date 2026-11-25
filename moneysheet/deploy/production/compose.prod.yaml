@@ -1,0 +1,113 @@
+name: moneysheet-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mysql:
+    image: mysql@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
+    restart: unless-stopped
+    mem_limit: 768m
+    entrypoint: ["/bin/bash", "/opt/production/mysql-preflight.sh"]
+    environment:
+      MYSQL_DATABASE: moneysheet_prod
+      MYSQL_ROOT_HOST: localhost
+    secrets: [mysql_root_password, app_password, migration_password]
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_bin", "--innodb-buffer-pool-size=134217728", "--max-connections=40"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init.sh:/docker-entrypoint-initdb.d/01-accounts.sh:ro
+      - ./mysql-preflight.sh:/opt/production/mysql-preflight.sh:ro
+      - ./mysql-health.sh:/opt/production/mysql-health.sh:ro
+    networks: [database]
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/opt/production/mysql-health.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    logging: *logging
+
+  be:
+    image: ${BE_IMAGE:?Set a versioned BE app image}
+    restart: unless-stopped
+    mem_limit: 768m
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://mysql:3306/moneysheet_prod?sslMode=REQUIRED
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError
+      SMTP_HOST: ${SMTP_HOST:?required}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:?required}
+      MONEYSHEET_MAIL_FROM: ${MONEYSHEET_MAIL_FROM:?required}
+    secrets: [app_password, smtp_password]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [web, database]
+    logging: *logging
+
+  migration:
+    image: ${MIGRATION_IMAGE:?Set a versioned migration image}
+    profiles: [tools]
+    restart: "no"
+    mem_limit: 512m
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/moneysheet_prod?sslMode=REQUIRED
+      MIGRATION_DB_USERNAME: moneysheet_migration
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+    secrets: [migration_password]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [database]
+    logging: *logging
+
+  frontend:
+    image: ${FE_IMAGE:?Set a versioned FE Caddy image}
+    restart: unless-stopped
+    mem_limit: 128m
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set the public HTTPS hostname}
+      ACME_EMAIL: ${ACME_EMAIL:?Set the certificate contact email}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      be:
+        condition: service_healthy
+    networks: [web]
+    logging: *logging
+
+networks:
+  web: {}
+  database:
+    internal: true
+
+volumes:
+  mysql_data: {}
+  caddy_data: {}
+  caddy_config: {}
+
+secrets:
+  mysql_root_password:
+    file: ./.secrets/mysql_root_password
+  app_password:
+    file: ./.secrets/app_password
+  migration_password:
+    file: ./.secrets/migration_password
+  smtp_password:
+    file: ./.secrets/smtp_password

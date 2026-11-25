@@ -46,6 +46,7 @@ public class SecurityConfiguration {
                     .accessDeniedHandler((request,response,error) -> errors.write(request,response,
                             error instanceof CsrfException ? ErrorCode.CSRF_INVALID : ErrorCode.FORBIDDEN)))
                 .authorizeHttpRequests(authorize -> {
+                    authorize.requestMatchers(org.springframework.http.HttpMethod.GET,"/internal/health").permitAll();
                     authorize.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/session", "/api/v1/auth/logout",
                         "/api/v1/auth/email-verifications", "/api/v1/auth/email-verifications/confirmation").permitAll();
                     if (environment.matchesProfiles("local")) {
