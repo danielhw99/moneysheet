@@ -1,0 +1,25 @@
+# Use together with compose.prod.yaml; Docker Compose >= 2.24.4.
+# Always pass a unique -p moneysheet-qa-... and an explicit test --env-file.
+name: moneysheet-qa
+services:
+  frontend:
+    ports: !override
+      - "127.0.0.1:18022:80"
+      - "127.0.0.1:18443:443"
+    environment:
+      SITE_ADDRESS: localhost
+      ACME_EMAIL: qa@example.invalid
+  be:
+    environment:
+      SMTP_HOST: smtp.example.invalid
+      SMTP_USERNAME: qa@example.invalid
+      MONEYSHEET_MAIL_FROM: qa@example.invalid
+secrets:
+  mysql_root_password:
+    file: ${QA_SECRETS_DIR:?Set an absolute disposable QA secrets directory}/mysql_root_password
+  app_password:
+    file: ${QA_SECRETS_DIR:?required}/app_password
+  migration_password:
+    file: ${QA_SECRETS_DIR:?required}/migration_password
+  smtp_password:
+    file: ${QA_SECRETS_DIR:?required}/smtp_password

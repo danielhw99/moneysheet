@@ -1,0 +1,30 @@
+{
+ email {$ACME_EMAIL}
+}
+
+{$SITE_ADDRESS} {
+ encode zstd gzip
+ header {
+  -Server
+  X-Content-Type-Options nosniff
+  Referrer-Policy strict-origin-when-cross-origin
+ }
+ @private path /internal /internal/* /actuator /actuator/* /v3/api-docs* /swagger-ui* /.env* /.git*
+ handle @private {
+  respond 404
+ }
+ @api path /api /api/*
+ handle @api {
+  reverse_proxy be:8080
+ }
+ handle /assets/* {
+  root * /usr/share/caddy
+  file_server
+ }
+ handle {
+  root * /usr/share/caddy
+  try_files {path} /index.html
+  header Cache-Control no-cache
+  file_server
+ }
+}

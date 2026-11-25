@@ -486,3 +486,8 @@ POST /api/v1/auth/session은 본문 없이 MS_REMEMBER 쿠키·CSRF로 호출합
 - 유지 증명에 연결된 세션은 요청마다 사용자 버전·증명 소속·폐기·30일 만료를 확인합니다. 업무 쓰기는 사용자 잠금 획득 후에도 증명을 재검사하므로 로그아웃 이전에 대기하던 쓰기로 데이터가 저장되지 않습니다. 일반 세션에는 증명 조회를 추가하지 않습니다.
 - 만료/폐기 데이터는 서버 시작 1시간 후부터 매시간 500행씩 별도의 짧은 트랜잭션으로 반복 삭제하며, 삭제 건수가 500행 미만이면 종료합니다. 정리 여부와 무관하게 만료·폐기 증명은 즉시 거부합니다.
 - 검증: Windows `test`, `compileIntegrationTestJava`, `bootJar`; Ubuntu 격리 Testcontainers MySQL의 AuthIntegrationTest·AccountIntegrationTest. 실제 개발 DB의 V13 적용·FE 체크박스/복원 연결·모바일 재방문 검수는 별도 후속 작업입니다.
+
+
+### #22 운영 컨테이너 기반
+
+저장소 루트 Dockerfile은 app/migration 두 타깃을 제공합니다. [운영 Compose·비밀 파일·명시적 migration·네트워크 및 검증](deploy/production/README.md)을 참고하세요. 개발 DB와 분리된 운영 기반이며 실제 공개 배포/CD는 후속 작업입니다.

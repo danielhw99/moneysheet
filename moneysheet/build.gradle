@@ -89,3 +89,12 @@ tasks.register('integrationTest', Test) {
     maxParallelForks = 1
 }
 tasks.named('check') { dependsOn tasks.named('integrationTest') }
+
+
+// Standalone migration runtime; never added to bootJar or app startup.
+tasks.register('migrationDist', Sync) {
+    dependsOn tasks.named('migrationClasses')
+    from(sourceSets.migration.output) { into 'classes' }
+    from(configurations.migrationRuntimeClasspath) { into 'lib' }
+    into layout.buildDirectory.dir('migration-dist')
+}

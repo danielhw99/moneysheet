@@ -1,0 +1,21 @@
+server:
+  address: 0.0.0.0
+  port: 8080
+  # BE is reachable only by the private Caddy network; no host port is published.
+  forward-headers-strategy: native
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: moneysheet_app
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 1
+      connection-timeout: 3000
+      validation-timeout: 2000
