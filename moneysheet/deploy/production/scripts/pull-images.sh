@@ -73,5 +73,10 @@ with os.fdopen(lock_fd,'a') as lock:
     finally:
         if not committed:record.unlink(missing_ok=True)
         if os.path.exists(tmp):os.unlink(tmp)
-print('Three digest references recorded; previous .env backed up privately. No services started.')
+# Reporting is best-effort after commit; a closed output pipe must not undo success.
+try:
+    print('Three digest references recorded; previous .env backed up privately. No services started.',flush=True)
+except OSError:
+    # Avoid another flush of the failed stream during Python shutdown.
+    sys.stdout=None
 PY

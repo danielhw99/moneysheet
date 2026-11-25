@@ -182,4 +182,20 @@ with patch('os.replace',side_effect=OSError('Injected replacement failure')):
         self.assertFalse(list((self.prod/'releases').glob('*-images.env')))
         self.assertFalse(list(self.prod.glob('.env-images-*')))
 
+
+    def test_closed_success_output_pipe_keeps_successful_exit(self):
+        reader,writer=os.pipe()
+        os.close(reader)
+        try:
+            result=subprocess.run(['python3','-c','import sys; exec(sys.stdin.read())',str(self.prod),*self.refs,*(['a'*40]*3)],input=self.python_update(),text=True,stdout=writer,stderr=subprocess.PIPE)
+        finally:
+            os.close(writer)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertNotIn('BrokenPipeError',result.stderr)
+        updated=(self.prod/'.env').read_text()
+        for ref in self.refs:self.assertIn(ref,updated)
+        records=list((self.prod/'releases').glob('*-images.env'))
+        self.assertEqual(len(records),1)
+        for ref in self.refs:self.assertIn(ref,records[0].read_text())
+
 if __name__ == '__main__':unittest.main()
