@@ -16,8 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.mockito.Mockito.*;
 @WebMvcTest({AuthController.class,com.danielhw99.auth.controller.MeController.class})
-@Import({SecurityConfiguration.class,SecurityErrorWriter.class,ApiJsonConfiguration.class,TraceIdFilter.class})
+@Import({SecurityConfiguration.class,com.danielhw99.auth.remember.RememberCookies.class,SecurityErrorWriter.class,ApiJsonConfiguration.class,TraceIdFilter.class})
 class AuthMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.auth.remember.RememberLoginService remember;
+
  @Autowired MockMvc mvc;
  @MockitoBean SignupService signup;
  @MockitoBean com.danielhw99.auth.security.AuthRateLimiter limiter;
@@ -45,6 +47,7 @@ class AuthMvcTest {
  @Test void loginRotatesSessionAndCsrfThenLogoutInvalidatesIt() throws Exception {
   var principal=new com.danielhw99.auth.security.AuthPrincipal(1L,"user@example.com","Nick");
   when(login.authenticate(any())).thenReturn(principal);
+  when(remember.login(any(),anyBoolean(),any())).thenReturn(new com.danielhw99.auth.remember.RememberGrant(principal,null,null));
   var user=new com.danielhw99.user.entity.User("user@example.com","user@example.com","Nick","hash","v1",java.time.LocalDateTime.now());
   org.springframework.test.util.ReflectionTestUtils.setField(user,"id",1L);
   when(users.findById(1L)).thenReturn(java.util.Optional.of(user));
@@ -90,5 +93,31 @@ class AuthMvcTest {
   mvc.perform(post("/api/v1/auth/login").with(csrf()).contentType("application/json").content("{}"))
     .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After","60"))
     .andExpect(jsonPath("$.code").value("RATE_LIMITED")).andExpect(jsonPath("$.traceId").isNotEmpty());
+ }
+
+ @Test void restoreRequiresCsrfAndRejectsRequestBodies() throws Exception {
+  mvc.perform(post("/api/v1/auth/session")).andExpect(status().isForbidden());
+  mvc.perform(post("/api/v1/auth/session").with(csrf()).contentType("application/json").content("{}"))
+   .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION"));
+ }
+
+ @Test void restoresCookieThroughPublicCsrfProtectedEndpoint() throws Exception {
+  var principal=new com.danielhw99.auth.security.AuthPrincipal(1L,"u@example.com","N");
+  when(remember.restore("old")).thenReturn(new com.danielhw99.auth.remember.RememberGrant(principal,"replacement",java.time.Instant.now().plusSeconds(3600)));
+  mvc.perform(post("/api/v1/auth/session").with(csrf()).cookie(new jakarta.servlet.http.Cookie("MS_REMEMBER","old")))
+   .andExpect(status().isOk()).andExpect(jsonPath("$.id").value("1")).andExpect(header().string("Set-Cookie",org.hamcrest.Matchers.containsString("MS_REMEMBER=replacement")));
+ }
+ @Test void failedOrConflictingRestoreDoesNotEraseNewerCookies() throws Exception {
+  for(var code:new com.danielhw99.common.error.ErrorCode[]{com.danielhw99.common.error.ErrorCode.UNAUTHENTICATED,com.danielhw99.common.error.ErrorCode.CONFLICT}){
+   doThrow(new com.danielhw99.common.error.ApiException(code)).when(remember).restore("old");
+   mvc.perform(post("/api/v1/auth/session").with(csrf()).cookie(new jakarta.servlet.http.Cookie("MS_REMEMBER","old")))
+    .andExpect(status().is(code.getStatus().value())).andExpect(header().doesNotExist("Set-Cookie"));
+  }
+ }
+
+ @Test void anonymousLogoutStillRequiresCsrfAndClearsBothCookies() throws Exception {
+  mvc.perform(post("/api/v1/auth/logout")).andExpect(status().isForbidden());
+  mvc.perform(post("/api/v1/auth/logout").with(csrf())).andExpect(status().isNoContent())
+   .andExpect(header().stringValues("Set-Cookie",org.hamcrest.Matchers.hasItems(org.hamcrest.Matchers.containsString("MS_REMEMBER=;"),org.hamcrest.Matchers.containsString("JSESSIONID=;"))));
  }
 }

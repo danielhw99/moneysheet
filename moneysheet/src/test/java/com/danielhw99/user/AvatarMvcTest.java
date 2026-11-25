@@ -27,8 +27,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AvatarController.class)
-@Import({SecurityConfiguration.class, SecurityErrorWriter.class, ApiJsonConfiguration.class, TraceIdFilter.class})
+@Import({SecurityConfiguration.class,com.danielhw99.auth.remember.RememberCookies.class, SecurityErrorWriter.class, ApiJsonConfiguration.class, TraceIdFilter.class})
 class AvatarMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.auth.remember.RememberLoginService remember;
+
     @Autowired MockMvc mvc;
     @MockitoBean AvatarService service;
     @MockitoBean UserRepository users;

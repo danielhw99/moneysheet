@@ -12,6 +12,16 @@ import jakarta.persistence.Table;
 @Table(name = "users")
 public class User extends BaseEntity {
 
+    @jakarta.persistence.OneToMany(mappedBy="user")
+    private java.util.Set<com.danielhw99.auth.remember.RememberLoginToken> rememberLogins = new java.util.HashSet<>();
+
+    // Invoked inside a transaction only after this user's write lock has been acquired.
+    public boolean hasActiveRememberLogin(String selector,java.time.Instant now) {
+        return rememberLogins.stream().anyMatch(token ->
+                java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(token.getSelector()).equals(selector)
+                && token.active(now,sessionVersion));
+    }
+
     @Column(name = "email", nullable = false, length = 254)
     private String email;
 

@@ -34,6 +34,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
+    private final com.danielhw99.auth.remember.RememberLoginService remember;
+    private final com.danielhw99.auth.remember.RememberCookies rememberCookies;
     private final SignupService signup;
     private final LoginService login;
     private final HttpSessionSecurityContextRepository contexts;
@@ -42,7 +44,8 @@ public class AuthController {
     private final boolean secureCookie;
     public AuthController(SignupService signup, LoginService login, HttpSessionSecurityContextRepository contexts,
             HttpSessionCsrfTokenRepository csrfTokens, Clock clock,
-            @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookie) {
+            @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookie,com.danielhw99.auth.remember.RememberLoginService remember,com.danielhw99.auth.remember.RememberCookies rememberCookies) {
+        this.remember=remember;this.rememberCookies=rememberCookies;
         this.signup=signup;this.login=login;this.contexts=contexts;
         this.csrfTokens=csrfTokens;this.clock=clock;this.secureCookie=secureCookie;
     }
@@ -57,9 +60,23 @@ public class AuthController {
     public Profile signup(@Valid @RequestBody SignupInput input) { return signup.signup(input); }
 
     @PostMapping("/login")
-    @Operation(summary="로그인", description="세션 ID 교체 후 프로필 반환. CSRF 토큰을 다시 취득해야 합니다.")
+    @Operation(summary="로그인", description="rememberMe 생략은 false입니다. true면 30일 로그인 유지 증명을 발급합니다. 세션 ID 교체 후 CSRF를 다시 취득해야 합니다.")
     public Profile login(@Valid @RequestBody LoginInput input, HttpServletRequest request,HttpServletResponse response) {
-        var principal=login.authenticate(input);
+        var grant=remember.login(login.authenticate(input),input.rememberMe(),rememberCookies.read(request));
+        return establish(grant,request,response);
+    }
+
+    @PostMapping("/session")
+    @Operation(summary="로그인 유지 세션 복원",description="본문 없이 MS_REMEMBER 쿠키와 CSRF로 복원합니다. 성공 시 증명 교체, 직전 증명10초 내 중복409, 만료·무효401. 성공 후 CSRF 재취득. 실패401/409는 유지 쿠키를 삭제하지 않습니다.")
+    public Profile restore(HttpServletRequest request,HttpServletResponse response) throws java.io.IOException {
+        if(request.getInputStream().read()!=-1)throw new com.danielhw99.common.error.ApiException(com.danielhw99.common.error.ErrorCode.VALIDATION);
+        var auth=SecurityContextHolder.getContext().getAuthentication();
+        if(auth!=null && auth.getPrincipal() instanceof com.danielhw99.auth.security.AuthPrincipal principal)return remember.current(principal).profile();
+        return establish(remember.restore(rememberCookies.read(request)),request,response);
+    }
+
+    private Profile establish(com.danielhw99.auth.remember.RememberGrant grant,HttpServletRequest request,HttpServletResponse response) {
+        var principal=grant.principal();
         var session=request.getSession();
         request.changeSessionId();
         csrfTokens.saveToken(null,request,response);
@@ -69,13 +86,18 @@ public class AuthController {
         context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(principal,null,List.of()));
         SecurityContextHolder.setContext(context);
         contexts.saveContext(context,request,response);
+        rememberCookies.write(response,grant);
         return principal.profile();
     }
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary="로그아웃", description="현재 세션을 무효화합니다. 유효한 CSRF 토큰이 필요합니다.")
+    @Operation(summary="로그아웃", description="현재 브라우저의 세션·로그인 유지 증명을 폐기합니다. 세션 만료 후에도 CSRF를 취득해 호출할 수 있습니다.")
     public void logout(HttpServletRequest request,HttpServletResponse response) {
+        var authentication=SecurityContextHolder.getContext().getAuthentication();
+        var principal=authentication!=null&&authentication.getPrincipal() instanceof com.danielhw99.auth.security.AuthPrincipal value?value:null;
+        remember.logout(principal,rememberCookies.read(request));
+        rememberCookies.write(response,new com.danielhw99.auth.remember.RememberGrant(null,null,null));
         var logout = new SecurityContextLogoutHandler();
         // Other in-flight requests may hold the session context; retain their principal for version checks.
         logout.setClearAuthentication(false);

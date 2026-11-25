@@ -9,7 +9,8 @@ public final class ActiveAccount {
  public static User requireCurrent(User user) {
   var authentication=SecurityContextHolder.getContext().getAuthentication();
   if(authentication!=null && authentication.getPrincipal() instanceof AuthPrincipal principal
-    && (!principal.userId().equals(user.getId()) || principal.sessionVersion()!=user.getSessionVersion()))
+    && (!principal.userId().equals(user.getId()) || principal.sessionVersion()!=user.getSessionVersion()
+        || (principal.rememberSelector()!=null&&!user.hasActiveRememberLogin(principal.rememberSelector(),java.time.Instant.now()))))
    throw new ApiException(ErrorCode.UNAUTHENTICATED);
   return user;
  }

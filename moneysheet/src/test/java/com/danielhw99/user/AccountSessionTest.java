@@ -31,7 +31,7 @@ class AccountSessionTest {
  @Test void secretInputsAreRedacted(){assertThat(new com.danielhw99.user.api.AccountInputs.Password("secret-current","secret-new").toString()).doesNotContain("secret");assertThat(new com.danielhw99.user.api.AccountInputs.Deletion("secret-current").toString()).doesNotContain("secret");}
  @Test void logoutDoesNotEraseThePrincipalHeldByAnInFlightWrite() {
   auth(0);var captured=SecurityContextHolder.getContext();
-  var controller=new com.danielhw99.auth.controller.AuthController(mock(com.danielhw99.auth.service.SignupService.class),mock(com.danielhw99.auth.service.LoginService.class),new org.springframework.security.web.context.HttpSessionSecurityContextRepository(),new org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository(),java.time.Clock.systemUTC(),false);
+  var controller=new com.danielhw99.auth.controller.AuthController(mock(com.danielhw99.auth.service.SignupService.class),mock(com.danielhw99.auth.service.LoginService.class),new org.springframework.security.web.context.HttpSessionSecurityContextRepository(),new org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository(),java.time.Clock.systemUTC(),false,mock(com.danielhw99.auth.remember.RememberLoginService.class),new com.danielhw99.auth.remember.RememberCookies(false,java.time.Clock.systemUTC()));
   var request=new MockHttpServletRequest();request.setSession(new MockHttpSession());controller.logout(request,new MockHttpServletResponse());
   assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
   // A simultaneous request already holds this context; it must retain the old version to reject its queued write.

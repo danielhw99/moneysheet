@@ -40,8 +40,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 
 @WebMvcTest(CategoryController.class)
-@Import({SecurityConfiguration.class, SecurityErrorWriter.class, ApiJsonConfiguration.class, TraceIdFilter.class})
+@Import({SecurityConfiguration.class,com.danielhw99.auth.remember.RememberCookies.class, SecurityErrorWriter.class, ApiJsonConfiguration.class, TraceIdFilter.class})
 class CategoryMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.auth.remember.RememberLoginService remember;
+
  @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.user.repository.UserRepository sessionUsers;
  @org.junit.jupiter.api.BeforeEach void activeSessionUser(){
   org.mockito.Mockito.when(sessionUsers.findById(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(call->{
