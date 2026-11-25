@@ -65,3 +65,7 @@ docker compose --env-file .env -f compose.prod.yaml up -d --wait be frontend
 실제 공개 DDNS의 인증서 발급·외부망 접속·재부팅 자동 기동·정기 백업/격리 복원·앱 이미지 롤백·운영 CD는 아직 후속입니다. 이미지/Compose 기반 검증이 전체 운영 배포 완료를 의미하지 않습니다. 정기 백업과 복구 절차는 별도 이슈에서 구성합니다.
 
 공식 참고: https://docs.docker.com/compose/how-tos/use-secrets/ , https://caddyserver.com/docs/caddyfile/directives/reverse_proxy
+
+## Private GHCR 게시
+
+[게시 및 서버 pull 절차](ghcr.md)를 따릅니다. 실제 게시·pull은 PR 병합 후 별도로 검증합니다.
