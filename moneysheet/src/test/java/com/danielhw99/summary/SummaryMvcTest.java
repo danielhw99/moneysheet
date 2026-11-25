@@ -29,8 +29,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SummaryController.class)
-@Import({SecurityConfiguration.class,SecurityErrorWriter.class,ApiJsonConfiguration.class,TraceIdFilter.class})
+@Import({SecurityConfiguration.class,com.danielhw99.auth.remember.RememberCookies.class,SecurityErrorWriter.class,ApiJsonConfiguration.class,TraceIdFilter.class})
 class SummaryMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.auth.remember.RememberLoginService remember;
+
  @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.user.repository.UserRepository sessionUsers;
  @org.junit.jupiter.api.BeforeEach void activeSessionUser(){
   org.mockito.Mockito.when(sessionUsers.findById(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(call->{

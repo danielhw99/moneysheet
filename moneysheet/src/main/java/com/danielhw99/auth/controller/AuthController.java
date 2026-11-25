@@ -34,6 +34,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
+    private final com.danielhw99.auth.remember.RememberLoginService remember;
+    private final com.danielhw99.auth.remember.RememberCookies rememberCookies;
     private final SignupService signup;
     private final LoginService login;
     private final HttpSessionSecurityContextRepository contexts;
@@ -42,7 +44,8 @@ public class AuthController {
     private final boolean secureCookie;
     public AuthController(SignupService signup, LoginService login, HttpSessionSecurityContextRepository contexts,
             HttpSessionCsrfTokenRepository csrfTokens, Clock clock,
-            @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookie) {
+            @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookie,com.danielhw99.auth.remember.RememberLoginService remember,com.danielhw99.auth.remember.RememberCookies rememberCookies) {
+        this.remember=remember;this.rememberCookies=rememberCookies;
         this.signup=signup;this.login=login;this.contexts=contexts;
         this.csrfTokens=csrfTokens;this.clock=clock;this.secureCookie=secureCookie;
     }
@@ -59,7 +62,8 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(summary="로그인", description="세션 ID 교체 후 프로필 반환. CSRF 토큰을 다시 취득해야 합니다.")
     public Profile login(@Valid @RequestBody LoginInput input, HttpServletRequest request,HttpServletResponse response) {
-        var principal=login.authenticate(input);
+        var grant=remember.login(login.authenticate(input),input.rememberMe(),rememberCookies.read(request));
+        var principal=grant.principal();
         var session=request.getSession();
         request.changeSessionId();
         csrfTokens.saveToken(null,request,response);
@@ -69,6 +73,7 @@ public class AuthController {
         context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(principal,null,List.of()));
         SecurityContextHolder.setContext(context);
         contexts.saveContext(context,request,response);
+        rememberCookies.write(response,grant);
         return principal.profile();
     }
 

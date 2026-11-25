@@ -16,8 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.mockito.Mockito.*;
 @WebMvcTest({AuthController.class,com.danielhw99.auth.controller.MeController.class})
-@Import({SecurityConfiguration.class,SecurityErrorWriter.class,ApiJsonConfiguration.class,TraceIdFilter.class})
+@Import({SecurityConfiguration.class,com.danielhw99.auth.remember.RememberCookies.class,SecurityErrorWriter.class,ApiJsonConfiguration.class,TraceIdFilter.class})
 class AuthMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.auth.remember.RememberLoginService remember;
+
  @Autowired MockMvc mvc;
  @MockitoBean SignupService signup;
  @MockitoBean com.danielhw99.auth.security.AuthRateLimiter limiter;
@@ -45,6 +47,7 @@ class AuthMvcTest {
  @Test void loginRotatesSessionAndCsrfThenLogoutInvalidatesIt() throws Exception {
   var principal=new com.danielhw99.auth.security.AuthPrincipal(1L,"user@example.com","Nick");
   when(login.authenticate(any())).thenReturn(principal);
+  when(remember.login(any(),anyBoolean(),any())).thenReturn(new com.danielhw99.auth.remember.RememberGrant(principal,null,null));
   var user=new com.danielhw99.user.entity.User("user@example.com","user@example.com","Nick","hash","v1",java.time.LocalDateTime.now());
   org.springframework.test.util.ReflectionTestUtils.setField(user,"id",1L);
   when(users.findById(1L)).thenReturn(java.util.Optional.of(user));

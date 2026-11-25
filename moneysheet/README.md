@@ -467,3 +467,8 @@ FROM users GROUP BY nickname_key HAVING COUNT(*) > 1;
 
 - 중복 시 V12의 단일 InnoDB ALTER는 실패하며 기존 사용자 데이터는 그대로입니다. 중복 해결·스키마 확인 후 실패한 Flyway 이력 유무를 확인하고, 필요한 경우에만 통제된 repair 후 dbMigrate를 재실행합니다. 일반 앱 실행으로 마이그레이션하지 않습니다.
 - 비밀번호 재입력·일치 확인은 FE에서 처리하며 API·DB에 확인용 비밀번호를 추가하지 않습니다. 닉네임 사전 확인용 별도 API도 추가하지 않습니다.
+
+
+### #57 로그인 유지 — 데이터·발급 기반
+
+로그인 입력에 rememberMe를 추가하며 생략false, 명시null/잘못된 타입은 거부합니다. 선택 시 MS_REMEMBER(HttpOnly·SameSite=Lax·Path=/·운영Secure) 쿠키와 SHA-256 검증값을 발급합니다. selector16바이트·validator32바이트 난수를 사용하며 원문 증명은 DB/로그에 저장하지 않습니다. 최초30일 절대 만료이며 V13은 신규 remember_login_tokens 테이블입니다. 기존V12는 변경하지 않습니다. 실제 개발 DB 적용은 별도 승인·백업 절차가 필요합니다. 일반 세션30분/12시간 정책은 유지합니다. 별도 복원·폐기 경쟁은 다음 단계에서 연결합니다.

@@ -16,8 +16,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.mockito.Mockito.*;
 
 @WebMvcTest(EmailVerificationController.class)
-@Import({SecurityConfiguration.class,SecurityErrorWriter.class})
+@Import({SecurityConfiguration.class,com.danielhw99.auth.remember.RememberCookies.class,SecurityErrorWriter.class})
 class EmailVerificationMvcTest {
+ @org.springframework.test.context.bean.override.mockito.MockitoBean com.danielhw99.auth.remember.RememberLoginService remember;
+
     @Autowired MockMvc mvc;
     @MockitoBean EmailVerificationService service;
     @MockitoBean com.danielhw99.auth.security.AuthRateLimiter limiter;
